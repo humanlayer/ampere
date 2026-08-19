@@ -1,0 +1,23 @@
+{
+	"name": "@ampere/core",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./greeting": "./src/greeting.service.ts"
+	},
+	"scripts": {
+		"build": "echo 'No build required - library package'",
+		"test": "vitest run --passWithNoTests",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"effect": "catalog:"
+	},
+	"devDependencies": {
+		"@ampere/vitest-config": "workspace:*",
+		"@effect/vitest": "catalog:",
+		"@types/bun": "catalog:",
+		"vitest": "catalog:"
+	}
+}

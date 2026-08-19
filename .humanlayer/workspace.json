@@ -1,0 +1,41 @@
+{
+  "disabled": false,
+  "pathTemplate": "~/.humanlayer/workspaces/{{ TASKSLUG }}/{{ REPOBASENAME }}",
+  "branchTemplate": "{{ TASKSLUG }}",
+  "sourceRef": "origin/master",
+  "setupCommand": "",
+  "repos": [
+    {
+      "localPath": ".",
+      "description": "ampere — Bun monorepo, Effect v4 WAL parser",
+      "primary": true,
+      "setupCommand": "bun install",
+      "copyGlobs": [
+        ".env",
+        ".env.local",
+        ".env.development.local",
+        ".claude/settings.local.json"
+      ]
+    },
+    {
+      "localPath": "../effect",
+      "description": "Effect v4 source (reference)",
+      "sourceRef": "origin/main"
+    },
+    {
+      "localPath": "../synclayer",
+      "description": "synclayer (reference)",
+      "sourceRef": "origin/main"
+    },
+    {
+      "localPath": "../electric",
+      "description": "ElectricSQL (reference)",
+      "sourceRef": "origin/main"
+    },
+    {
+      "localPath": "../tanstack-db",
+      "description": "TanStack DB (reference)",
+      "sourceRef": "origin/main"
+    }
+  ]
+}

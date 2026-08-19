@@ -1,0 +1,85 @@
+import { defineConfig } from 'vite-plus'
+
+export default defineConfig({
+	// Vitest: every workspace package with a vitest.config.ts is a project.
+	test: {
+		projects: ['apps/*/vitest.config.ts', 'packages/*/vitest.config.ts'],
+	},
+	// Oxlint. `typeAware` + `typeCheck` run full TypeScript 7 (tsgo) type checking
+	// through the effect-tsgo-patched tsgolint, which also emits Effect diagnostics.
+	lint: {
+		plugins: ['typescript', 'oxc', 'vitest', 'effecttsgo'],
+		options: {
+			typeAware: true,
+			typeCheck: true,
+		},
+		// Local anti-slop plugin (vendored from https://github.com/dmmulroy/anti-slop).
+		jsPlugins: [
+			{ name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
+			{ name: 'anti-slop-effect', specifier: './tools/oxlint/anti-slop/effect/index.ts' },
+		],
+		ignorePatterns: [
+			'**/node_modules/**',
+			'**/dist/**',
+			'.agent/**',
+			'.agents/**',
+			'.claude/**',
+			'.codex/**',
+			'.continue/**',
+			'.cursor/**',
+			'.gemini/**',
+			'.opencode/**',
+			'.pi/**',
+			'.roo/**',
+			'.windsurf/**',
+			'tools/oxlint/anti-slop/**',
+		],
+		rules: {
+			'oxc/no-barrel-file': 'error',
+			'typescript/no-explicit-any': 'warn',
+			'typescript/await-thenable': 'error',
+			'typescript/no-floating-promises': 'warn',
+			'typescript/no-base-to-string': 'error',
+			'eslint/no-unused-vars': 'error',
+			'typescript/no-misused-promises': 'warn',
+			'typescript/no-meaningless-void-operator': 'error',
+			'typescript/no-non-null-assertion': 'warn',
+			'typescript/no-redundant-type-constituents': 'error',
+			'typescript/restrict-template-expressions': 'error',
+			'typescript/unbound-method': 'error',
+			'effecttsgo/any-unknown-in-error-context': 'error',
+			'vitest/expect-expect': 'off',
+			'vitest/no-conditional-expect': 'off',
+			'vitest/no-disabled-tests': 'off',
+			'vitest/no-standalone-expect': 'off',
+			'vitest/require-mock-type-parameters': 'off',
+			'vitest/require-to-throw-message': 'off',
+			'anti-slop/no-chained-type-assertions': 'error',
+			'anti-slop/no-conditional-empty-object-spread': 'error',
+			'anti-slop/no-known-value-widening': 'error',
+			'anti-slop/no-module-mocking': 'error',
+			'anti-slop/no-object-parameters': 'error',
+			'anti-slop/no-reflect-apply': 'error',
+			'anti-slop/no-reflect-get': 'error',
+			'anti-slop/no-runtime-typeof': 'error',
+			'anti-slop/no-shape-in-symbol-names': 'error',
+			'anti-slop/no-unknown-parameters': 'error',
+			'anti-slop/no-unknown-returns': 'error',
+			'anti-slop/no-unknown-type-aliases': 'error',
+			'anti-slop/no-unsafe-dictionary-type': 'error',
+			'anti-slop/no-widen-then-assert': 'error',
+			'anti-slop/require-safety-comment-for-type-assertion': 'error',
+			'anti-slop-effect/no-service-constructor-imports': 'error',
+		},
+	},
+	// Oxfmt.
+	fmt: {
+		printWidth: 120,
+		tabWidth: 4,
+		useTabs: true,
+		singleQuote: true,
+		semi: false,
+		sortImports: true,
+		ignorePatterns: ['**/node_modules/**', '**/dist/**', '.claude/**', 'tools/oxlint/anti-slop/**'],
+	},
+})

@@ -1,0 +1,30 @@
+[install]
+exact = true
+linker = "isolated"
+linkWorkspacePackages = true
+minimumReleaseAge = 604800 # 7 days in seconds
+minimumReleaseAgeExcludes = [
+	"@types/bun",
+	"bun-types",
+	"typescript",
+	"effect",
+	"@effect/tsgo",
+	"@effect/tsgo-darwin-arm64",
+	"@effect/tsgo-darwin-x64",
+	"@effect/tsgo-linux-arm",
+	"@effect/tsgo-linux-arm64",
+	"@effect/tsgo-linux-x64",
+	"@effect/tsgo-windows-arm64",
+	"@effect/tsgo-windows-x64",
+	"@effect/platform-browser",
+	"@effect/platform-bun",
+	"@effect/platform-node",
+	"@effect/platform-node-shared",
+	"@effect/vitest",
+	"@effect/opentelemetry",
+	"@effect/sql-pg",
+	"drizzle-orm",
+]
+
+[console]
+depth = 4
