@@ -2,7 +2,6 @@
 	"name": "ampere",
 	"private": true,
 	"workspaces": [
-		"apps/*",
 		"packages/*"
 	],
 	"type": "module",
