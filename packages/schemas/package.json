@@ -1,10 +1,10 @@
 {
-	"name": "@ampere/core",
+	"name": "@ampere/schemas",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
 	"exports": {
-		"./greeting": "./src/greeting.service.ts"
+		"./wal": "./src/postgres-wal/index.ts"
 	},
 	"scripts": {
 		"build": "echo 'No build required - library package'",
@@ -12,6 +12,8 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@effect/sql-pg": "catalog:",
+		"drizzle-orm": "catalog:",
 		"effect": "catalog:"
 	},
 	"devDependencies": {
