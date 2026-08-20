@@ -1,0 +1,16 @@
+services:
+    postgres:
+        image: postgres:17
+        # Logical replication so downstream consumers can follow the WAL.
+        command: postgres -c wal_level=logical
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+            POSTGRES_DB: ampere
+        ports:
+            - '55432:5432'
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U postgres -d ampere']
+            interval: 2s
+            timeout: 2s
+            retries: 15

@@ -1,0 +1,24 @@
+{
+	"name": "@ampere/server",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "echo 'No build required - runs from source'",
+		"dev": "node --watch src/main.ts",
+		"start": "node src/main.ts",
+		"test": "vitest run --passWithNoTests",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@ampere/core": "workspace:*",
+		"@effect/platform-node": "catalog:",
+		"effect": "catalog:"
+	},
+	"devDependencies": {
+		"@ampere/vitest-config": "workspace:*",
+		"@effect/vitest": "catalog:",
+		"@types/node": "catalog:",
+		"vitest": "catalog:"
+	}
+}
