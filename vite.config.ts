@@ -8,7 +8,12 @@ export default defineConfig({
 	// Oxlint. `typeAware` + `typeCheck` run full TypeScript 7 (tsgo) type checking
 	// through the effect-tsgo-patched tsgolint, which also emits Effect diagnostics.
 	lint: {
-		plugins: ['typescript', 'oxc', 'vitest', 'effecttsgo'],
+		categories: {
+			correctness: 'error',
+			suspicious: 'error',
+			perf: 'error',
+		},
+		plugins: ['typescript', 'import', 'oxc', 'vitest', 'effecttsgo'],
 		options: {
 			typeAware: true,
 			typeCheck: true,
@@ -36,14 +41,22 @@ export default defineConfig({
 		],
 		rules: {
 			'oxc/no-barrel-file': 'error',
-			'typescript/no-explicit-any': 'warn',
+			'typescript/no-explicit-any': 'error',
 			'typescript/await-thenable': 'error',
 			'typescript/no-floating-promises': 'warn',
 			'typescript/no-base-to-string': 'error',
-			'eslint/no-unused-vars': 'error',
+			'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
 			'typescript/no-misused-promises': 'warn',
 			'typescript/no-meaningless-void-operator': 'error',
-			'typescript/no-non-null-assertion': 'warn',
+			'typescript/no-non-null-assertion': 'error',
+			'typescript/no-extra-non-null-assertion': 'error',
+			'typescript/no-non-null-asserted-optional-chain': 'error',
+			'typescript/consistent-type-imports': [
+				'error',
+				{ prefer: 'type-imports', fixStyle: 'separate-type-imports' },
+			],
+			'import/namespace': 'off',
+			'import/no-duplicates': 'error',
 			'typescript/no-redundant-type-constituents': 'error',
 			'typescript/restrict-template-expressions': 'error',
 			'typescript/unbound-method': 'error',
