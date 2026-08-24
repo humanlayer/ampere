@@ -6,16 +6,25 @@ import * as SqlClient from 'effect/unstable/sql/SqlClient'
 import { expect } from 'vitest'
 
 import { PgLive } from '../src/pg.layer.ts'
-import { todos } from '../src/schema.ts'
+import { todoComments, todos } from '../src/schema.ts'
 
 const resetTodosTable = Effect.gen(function* () {
 	const sql = yield* SqlClient.SqlClient
+	yield* sql`DROP TABLE IF EXISTS todo_comments`
 	yield* sql`DROP TABLE IF EXISTS todos`
 	yield* sql`
 		CREATE TABLE todos (
 			id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
 			title text NOT NULL,
 			completed boolean NOT NULL DEFAULT false,
+			"createdAt" timestamptz NOT NULL DEFAULT now()
+		)
+	`
+	yield* sql`
+		CREATE TABLE todo_comments (
+			id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+			"todoId" integer NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+			body text NOT NULL,
 			"createdAt" timestamptz NOT NULL DEFAULT now()
 		)
 	`
@@ -73,6 +82,24 @@ describe('PostgreSQL through Effect SQL', () => {
 
 			const all = yield* db.select().from(todos)
 			expect(all).toHaveLength(0)
+		}).pipe(Effect.provide(PgLive)),
+	)
+
+	it.effect('persists comments for a todo', () =>
+		Effect.gen(function* () {
+			yield* resetTodosTable
+			const db = yield* PgDrizzle.makeWithDefaults()
+
+			const [todo] = yield* db.insert(todos).values({ title: 'write a comment' }).returning()
+			if (todo === undefined) {
+				return yield* new MissingReturnedRowError()
+			}
+
+			const [comment] = yield* db
+				.insert(todoComments)
+				.values({ todoId: todo.id, body: 'a related row' })
+				.returning()
+			expect(comment?.todoId).toBe(todo.id)
 		}).pipe(Effect.provide(PgLive)),
 	)
 })

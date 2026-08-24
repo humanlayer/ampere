@@ -1,0 +1,26 @@
+{
+	"name": "@ampere/replication",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "echo 'No build required - library package'",
+		"test": "vitest run --passWithNoTests",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@effect/sql-pg": "catalog:",
+		"drizzle-orm": "catalog:",
+		"effect": "catalog:",
+		"effect-machine": "catalog:"
+	},
+	"devDependencies": {
+		"@ampere/vitest-config": "workspace:*",
+		"@effect/vitest": "catalog:",
+		"@types/bun": "catalog:",
+		"vitest": "catalog:"
+	}
+}
