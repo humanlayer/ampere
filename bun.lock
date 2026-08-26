@@ -35,7 +35,6 @@
       "name": "@ampere/replication",
       "version": "0.0.0",
       "dependencies": {
-        "@effect/sql-pg": "catalog:",
         "drizzle-orm": "catalog:",
         "effect": "catalog:",
         "effect-machine": "catalog:",

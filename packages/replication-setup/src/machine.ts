@@ -1,5 +1,5 @@
 import { Schema, SchemaGetter } from 'effect'
-import { Event, Slot, State } from 'effect-machine'
+import { Event, Machine, Slot, State } from 'effect-machine'
 
 /**
  * Postgres WAL LSN - Log Sequence Number - is a uint64
@@ -172,18 +172,16 @@ export const ReplicationEvent = Event({
 	SourceIdentified: { sourceIdentity: ReplicationSourceIdentity },
 	ServerInfoRead: { serverInfo: ReplicationServerInfo },
 	SlotLeaseAcquired: {},
-	SlotLeaseWaitRequired: { retry: SlotLeaseRetry },
+	SlotLeaseWaitRequired: {},
 	SlotLeaseRetryElapsed: {},
 	ReplicationContractEnsured: {},
 	ReplicationSlotReady: { slotPosition: ReplicationSlotPosition },
 	OutputSettingsPinned: {},
 	PgOutputStarted: {},
 	SessionUnavailable: {
-		phase: ConnectionPhase,
 		reason: ReconnectReason,
 	},
 	SourceRejected: {
-		phase: ConnectionPhase,
 		reason: SourceRejectionReason,
 	},
 	StopRequested: {},
@@ -192,7 +190,7 @@ export const ReplicationEvent = Event({
 /**
  * Slots are side effects of the machine that we can supply at runtime or test-time
  */
-export const ReplicationFunctionSlots = Slot.define({
+export const ReplicationSlot = Slot.define({
 	openReplicationSession: Slot.fn({}),
 	identifySource: Slot.fn({}),
 	readServerInfo: Slot.fn({}),
@@ -213,3 +211,191 @@ export const ReplicationFunctionSlots = Slot.define({
 		initialSafeFlushLsn: PostgresLsnValue,
 	}),
 })
+
+/**
+ * Pure helper for slot acquisition retry
+ */
+
+const calculateSlotLeaseRetryDelayMilliseconds = (attempt: number): number => Math.min(100 * 2 ** (attempt - 1), 5_000)
+
+/**
+ * Create a replication connection for a given plan
+ */
+
+export const ReplicationConnection = (plan: typeof ReplicationPlan.Type) =>
+	Machine.make({
+		state: ReplicationState,
+		event: ReplicationEvent,
+		slots: ReplicationSlot,
+		initial: ReplicationState.Connecting({ plan }),
+	})
+		// on connecting state, open the session - when connection is opened, then we move to identifying source
+		.spawn(ReplicationState.Connecting, ({ slots }) => slots.openReplicationSession())
+		.on(ReplicationState.Connecting, ReplicationEvent.ConnectionOpened, ({ state }) =>
+			ReplicationState.IdentifyingSource.with(state),
+		)
+
+		// Source Identification
+		.spawn(ReplicationState.IdentifyingSource, ({ slots }) => slots.identifySource())
+		.on(ReplicationState.IdentifyingSource, ReplicationEvent.SourceIdentified, ({ state, event }) =>
+			ReplicationState.ReadingServerInfo({
+				plan: state.plan,
+				sourceIdentity: event.sourceIdentity,
+			}),
+		)
+
+		// Read Server info
+		.spawn(ReplicationState.ReadingServerInfo, ({ slots }) => slots.readServerInfo())
+		.on(ReplicationState.ReadingServerInfo, ReplicationEvent.ServerInfoRead, ({ state, event }) =>
+			ReplicationState.AcquiringSlotLease({
+				leaseAttempt: 1,
+				plan: state.plan,
+				sourceIdentity: state.sourceIdentity,
+				serverInfo: event.serverInfo,
+			}),
+		)
+
+		// Acquire slot release - may succeed and move to replication contract, or have to wait and retry
+		.spawn(ReplicationState.AcquiringSlotLease, ({ slots, state }) =>
+			slots.acquireSlotLease({ slotName: state.plan.slotName }),
+		)
+		.on(ReplicationState.AcquiringSlotLease, ReplicationEvent.SlotLeaseAcquired, ({ state }) =>
+			ReplicationState.EnsuringReplicationContract({
+				plan: state.plan,
+				sourceIdentity: state.sourceIdentity,
+				serverInfo: state.serverInfo,
+			}),
+		)
+		.on(ReplicationState.AcquiringSlotLease, ReplicationEvent.SlotLeaseWaitRequired, ({ state }) =>
+			ReplicationState.WaitingToRetrySlotLease({
+				plan: state.plan,
+				sourceIdentity: state.sourceIdentity,
+				serverInfo: state.serverInfo,
+				retry: SlotLeaseRetry.make({
+					attempt: state.leaseAttempt,
+					delayMilliseconds: calculateSlotLeaseRetryDelayMilliseconds(state.leaseAttempt),
+				}),
+			}),
+		)
+
+		// when we're waiting, when the wait is elapsed, move back to the acquisition state and ALSO schedule that
+		.on(ReplicationState.WaitingToRetrySlotLease, ReplicationEvent.SlotLeaseRetryElapsed, ({ state }) =>
+			ReplicationState.AcquiringSlotLease({
+				plan: state.plan,
+				sourceIdentity: state.sourceIdentity,
+				serverInfo: state.serverInfo,
+				leaseAttempt: state.retry.attempt + 1,
+			}),
+		)
+		.timeout(ReplicationState.WaitingToRetrySlotLease, {
+			duration: (state) => state.retry.delayMilliseconds,
+			event: ReplicationEvent.SlotLeaseRetryElapsed,
+		})
+
+		// Ensuring replication constract - getting all the stuff setup
+		.spawn(ReplicationState.EnsuringReplicationContract, ({ slots, state }) =>
+			slots.ensureReplicationContract({
+				publicationName: state.plan.publicationName,
+				relations: state.plan.relations,
+				serverVersionNumber: state.serverInfo.serverVersionNumber,
+			}),
+		)
+		.on(ReplicationState.EnsuringReplicationContract, ReplicationEvent.ReplicationContractEnsured, ({ state }) =>
+			ReplicationState.EnsuringReplicationSlot({
+				plan: state.plan,
+				serverInfo: state.serverInfo,
+				sourceIdentity: state.sourceIdentity,
+			}),
+		)
+
+		// Handle replication setuyp
+		.spawn(ReplicationState.EnsuringReplicationSlot, ({ slots, state }) =>
+			slots.ensureReplicationSlot({ slotName: state.plan.slotName }),
+		)
+		.on(ReplicationState.EnsuringReplicationSlot, ReplicationEvent.ReplicationSlotReady, ({ state, event }) =>
+			ReplicationState.PinningOutputSettings({
+				plan: state.plan,
+				serverInfo: state.serverInfo,
+				sourceIdentity: state.sourceIdentity,
+				slotPosition: event.slotPosition,
+			}),
+		)
+
+		// Pinning Output settings
+		.spawn(ReplicationState.PinningOutputSettings, ({ slots }) => slots.pinOutputSettings())
+		.on(ReplicationState.PinningOutputSettings, ReplicationEvent.OutputSettingsPinned, ({ state }) =>
+			ReplicationState.StartingPgOutput({
+				plan: state.plan,
+				serverInfo: state.serverInfo,
+				slotPosition: state.slotPosition,
+				sourceIdentity: state.sourceIdentity,
+			}),
+		)
+
+		// start pg output
+		.spawn(ReplicationState.StartingPgOutput, ({ slots, state }) =>
+			slots.startPgOutput({ slotName: state.plan.slotName, publicationName: state.plan.publicationName }),
+		)
+		.on(ReplicationState.StartingPgOutput, ReplicationEvent.PgOutputStarted, ({ state }) =>
+			ReplicationState.Streaming({
+				slotPosition: state.slotPosition,
+				serverInfo: state.serverInfo,
+				sourceIdentity: state.sourceIdentity,
+				plan: state.plan,
+			}),
+		)
+		.spawn(ReplicationState.Streaming, ({ slots, state }) =>
+			slots.consumePgOutput({
+				keepaliveIntervalMilliseconds: state.serverInfo.keepaliveIntervalMilliseconds,
+				initialSafeFlushLsn: state.slotPosition.confirmedFlushLsn,
+			}),
+		)
+		// Error states - Stop Requested, Session Unavaiable, Source Rejected
+		.onAny(ReplicationEvent.StopRequested, () => ReplicationState.Stopped)
+		.on(ReplicationState.Connecting, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'Connecting', reason: event.reason }),
+		)
+		.on(ReplicationState.IdentifyingSource, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'IdentifyingSource', reason: event.reason }),
+		)
+		.on(ReplicationState.ReadingServerInfo, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'ReadingServerInfo', reason: event.reason }),
+		)
+		.on(ReplicationState.AcquiringSlotLease, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'AcquiringSlotLease', reason: event.reason }),
+		)
+		.on(ReplicationState.WaitingToRetrySlotLease, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'WaitingToRetrySlotLease', reason: event.reason }),
+		)
+		.on(ReplicationState.EnsuringReplicationContract, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'EnsuringReplicationContract', reason: event.reason }),
+		)
+		.on(ReplicationState.EnsuringReplicationSlot, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'EnsuringReplicationSlot', reason: event.reason }),
+		)
+		.on(ReplicationState.PinningOutputSettings, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'PinningOutputSettings', reason: event.reason }),
+		)
+		.on(ReplicationState.StartingPgOutput, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'StartingPgOutput', reason: event.reason }),
+		)
+		.on(ReplicationState.Streaming, ReplicationEvent.SessionUnavailable, ({ event }) =>
+			ReplicationState.ReconnectRequired({ phase: 'Streaming', reason: event.reason }),
+		)
+		.on(ReplicationState.ReadingServerInfo, ReplicationEvent.SourceRejected, ({ event }) =>
+			ReplicationState.SourceConfigurationRejected({ phase: 'ReadingServerInfo', reason: event.reason }),
+		)
+		.on(ReplicationState.EnsuringReplicationContract, ReplicationEvent.SourceRejected, ({ event }) =>
+			ReplicationState.SourceConfigurationRejected({ phase: 'EnsuringReplicationContract', reason: event.reason }),
+		)
+		.on(ReplicationState.EnsuringReplicationSlot, ReplicationEvent.SourceRejected, ({ event }) =>
+			ReplicationState.SourceConfigurationRejected({ phase: 'EnsuringReplicationSlot', reason: event.reason }),
+		)
+		.on(ReplicationState.StartingPgOutput, ReplicationEvent.SourceRejected, ({ event }) =>
+			ReplicationState.SourceConfigurationRejected({ phase: 'StartingPgOutput', reason: event.reason }),
+		)
+
+		// Final States
+		.final(ReplicationState.ReconnectRequired)
+		.final(ReplicationState.SourceConfigurationRejected)
+		.final(ReplicationState.Stopped)
