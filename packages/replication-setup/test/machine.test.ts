@@ -1,19 +1,21 @@
 import { describe, it } from '@effect/vitest'
-import { Effect } from 'effect'
-import { simulate } from 'effect-machine'
+import { MachineTest } from '@typeonce/effect-machine/testing'
+import { Effect, Option, Schema } from 'effect'
 import { expect } from 'vitest'
 
 import {
 	Lsn,
 	ReplicationConnection,
-	ReplicationEvent,
 	ReplicationPlan,
 	ReplicationRelation,
 	ReplicationServerInfo,
 	ReplicationSlotPosition,
 	ReplicationSourceIdentity,
-	ReplicationState,
+	ReplicationStates,
 } from '../src/machine.ts'
+import { ReplicationEventFields } from '../src/schemas.ts'
+
+const ReplicationEvent = Schema.TaggedUnion(ReplicationEventFields)
 
 const replicationPlan = ReplicationPlan.make({
 	slotName: 'ampere_slot',
@@ -27,7 +29,7 @@ const replicationPlan = ReplicationPlan.make({
 	],
 })
 
-const sourceIdentified = ReplicationEvent.SourceIdentified({
+const sourceIdentified = ReplicationEvent.cases.SourceIdentified.make({
 	sourceIdentity: ReplicationSourceIdentity.make({
 		systemIdentifier: 'ampere-test-system',
 		timelineId: 1,
@@ -36,7 +38,7 @@ const sourceIdentified = ReplicationEvent.SourceIdentified({
 	}),
 })
 
-const serverInfoRead = ReplicationEvent.ServerInfoRead({
+const serverInfoRead = ReplicationEvent.cases.ServerInfoRead.make({
 	serverInfo: ReplicationServerInfo.make({
 		serverVersionNumber: 170000,
 		backendProcessId: 1,
@@ -45,153 +47,102 @@ const serverInfoRead = ReplicationEvent.ServerInfoRead({
 	}),
 })
 
-const replicationSlotReady = ReplicationEvent.ReplicationSlotReady({
+const replicationSlotReady = ReplicationEvent.cases.ReplicationSlotReady.make({
 	slotPosition: ReplicationSlotPosition.make({
 		confirmedFlushLsn: Lsn.make(0n),
 		slotWasCreated: true,
 	}),
 })
 
-const replicationSlotHandlers = {
-	openReplicationSession: () => Effect.void,
-	identifySource: () => Effect.void,
-	readServerInfo: () => Effect.void,
-	acquireSlotLease: () => Effect.void,
-	ensureReplicationContract: () => Effect.void,
-	ensureReplicationSlot: () => Effect.void,
-	pinOutputSettings: () => Effect.void,
-	startPgOutput: () => Effect.void,
-	consumePgOutput: () => Effect.void,
-}
-
 const successfulSetupEvents = [
-	ReplicationEvent.ConnectionOpened,
+	ReplicationEvent.cases.ConnectionOpened.make({}),
 	sourceIdentified,
 	serverInfoRead,
-	ReplicationEvent.SlotLeaseAcquired,
-	ReplicationEvent.ReplicationContractEnsured,
+	ReplicationEvent.cases.SlotLeaseAcquired.make({}),
+	ReplicationEvent.cases.ReplicationContractEnsured.make({}),
 	replicationSlotReady,
-	ReplicationEvent.OutputSettingsPinned,
-	ReplicationEvent.PgOutputStarted,
+	ReplicationEvent.cases.OutputSettingsPinned.make({}),
+	ReplicationEvent.cases.PgOutputStarted.make({}),
 ] as const
-
-const getStateTag = ReplicationState.$match({
-	Connecting: () => 'Connecting',
-	IdentifyingSource: () => 'IdentifyingSource',
-	ReadingServerInfo: () => 'ReadingServerInfo',
-	AcquiringSlotLease: () => 'AcquiringSlotLease',
-	WaitingToRetrySlotLease: () => 'WaitingToRetrySlotLease',
-	EnsuringReplicationContract: () => 'EnsuringReplicationContract',
-	EnsuringReplicationSlot: () => 'EnsuringReplicationSlot',
-	PinningOutputSettings: () => 'PinningOutputSettings',
-	StartingPgOutput: () => 'StartingPgOutput',
-	Streaming: () => 'Streaming',
-	ReconnectRequired: () => 'ReconnectRequired',
-	SourceConfigurationRejected: () => 'SourceConfigurationRejected',
-	Stopped: () => 'Stopped',
-})
 
 describe('ReplicationConnection', () => {
 	it.effect('reaches Streaming only after every setup prerequisite succeeds', () =>
 		Effect.gen(function* () {
-			const result = yield* simulate(ReplicationConnection(replicationPlan), successfulSetupEvents, {
-				slots: replicationSlotHandlers,
+			const trace = yield* MachineTest.run(ReplicationConnection, {
+				input: replicationPlan,
+				events: successfulSetupEvents,
 			})
+			const configurations = [trace.initial.configuration, ...trace.steps.map((step) => step.afterConfiguration)]
 
-			expect(result.states.map(getStateTag)).toEqual([
-				'Connecting',
-				'IdentifyingSource',
-				'ReadingServerInfo',
-				'AcquiringSlotLease',
-				'EnsuringReplicationContract',
-				'EnsuringReplicationSlot',
-				'PinningOutputSettings',
-				'StartingPgOutput',
-				'Streaming',
+			expect(configurations).toEqual([
+				['Connecting'],
+				['IdentifyingSource'],
+				['ReadingServerInfo'],
+				['AcquiringSlotLease'],
+				['EnsuringReplicationContract'],
+				['EnsuringReplicationSlot'],
+				['PinningOutputSettings'],
+				['StartingPgOutput'],
+				['Streaming'],
 			])
 		}),
 	)
 
 	it.effect('waits with an exponential delay before incrementing the slot lease attempt', () =>
 		Effect.gen(function* () {
-			const result = yield* simulate(
-				ReplicationConnection(replicationPlan),
-				[
-					ReplicationEvent.ConnectionOpened,
+			const trace = yield* MachineTest.run(ReplicationConnection, {
+				input: replicationPlan,
+				events: [
+					ReplicationEvent.cases.ConnectionOpened.make({}),
 					sourceIdentified,
 					serverInfoRead,
-					ReplicationEvent.SlotLeaseWaitRequired,
-					ReplicationEvent.SlotLeaseRetryElapsed,
+					ReplicationEvent.cases.SlotLeaseWaitRequired.make({}),
+					ReplicationEvent.cases.SlotLeaseRetryElapsed.make({}),
 				],
-				{ slots: replicationSlotHandlers },
-			)
-			const waitingState = result.states.find(ReplicationState.$is('WaitingToRetrySlotLease'))
+			})
+			const waitingSnapshot = trace.steps
+				.map((step) => step.after)
+				.find((snapshot) => ReplicationStates.matches(snapshot, 'WaitingToRetrySlotLease'))
 
-			expect(waitingState).toMatchObject({
-				retry: { attempt: 1, delayMilliseconds: 100 },
-			})
-			expect(getStateTag(result.finalState)).toBe('AcquiringSlotLease')
-			ReplicationState.$match(result.finalState, {
-				Connecting: () => undefined,
-				IdentifyingSource: () => undefined,
-				ReadingServerInfo: () => undefined,
-				AcquiringSlotLease: (state) => expect(state.leaseAttempt).toBe(2),
-				WaitingToRetrySlotLease: () => undefined,
-				EnsuringReplicationContract: () => undefined,
-				EnsuringReplicationSlot: () => undefined,
-				PinningOutputSettings: () => undefined,
-				StartingPgOutput: () => undefined,
-				Streaming: () => undefined,
-				ReconnectRequired: () => undefined,
-				SourceConfigurationRejected: () => undefined,
-				Stopped: () => undefined,
-			})
+			expect(waitingSnapshot).toBeDefined()
+			const waitingState = Option.getOrThrow(
+				ReplicationStates.get(waitingSnapshot ?? trace.final, 'WaitingToRetrySlotLease'),
+			)
+			expect(waitingState.retry.attempt).toBe(1)
+			expect(waitingState.retry.delayMilliseconds).toBe(100)
+
+			expect(ReplicationStates.matches(trace.final, 'AcquiringSlotLease')).toBe(true)
+			const finalState = Option.getOrThrow(ReplicationStates.get(trace.final, 'AcquiringSlotLease'))
+			expect(finalState.leaseAttempt).toBe(2)
 		}),
 	)
 
 	it.effect('records the actual active phase when a session becomes unavailable', () =>
 		Effect.gen(function* () {
-			const result = yield* simulate(
-				ReplicationConnection(replicationPlan),
-				[
-					ReplicationEvent.ConnectionOpened,
+			const trace = yield* MachineTest.run(ReplicationConnection, {
+				input: replicationPlan,
+				events: [
+					ReplicationEvent.cases.ConnectionOpened.make({}),
 					sourceIdentified,
 					serverInfoRead,
-					ReplicationEvent.SessionUnavailable({ reason: 'setup-command-failed' }),
+					ReplicationEvent.cases.SessionUnavailable.make({ reason: 'setup-command-failed' }),
 				],
-				{ slots: replicationSlotHandlers },
-			)
-
-			ReplicationState.$match(result.finalState, {
-				Connecting: () => undefined,
-				IdentifyingSource: () => undefined,
-				ReadingServerInfo: () => undefined,
-				AcquiringSlotLease: () => undefined,
-				WaitingToRetrySlotLease: () => undefined,
-				EnsuringReplicationContract: () => undefined,
-				EnsuringReplicationSlot: () => undefined,
-				PinningOutputSettings: () => undefined,
-				StartingPgOutput: () => undefined,
-				Streaming: () => undefined,
-				ReconnectRequired: (state) => {
-					expect(state.phase).toBe('AcquiringSlotLease')
-					expect(state.reason).toBe('setup-command-failed')
-				},
-				SourceConfigurationRejected: () => undefined,
-				Stopped: () => undefined,
 			})
+			const finalState = Option.getOrThrow(ReplicationStates.get(trace.final, 'ReconnectRequired'))
+
+			expect(finalState.phase).toBe('AcquiringSlotLease')
+			expect(finalState.reason).toBe('setup-command-failed')
 		}),
 	)
 
 	it.effect('stops cleanly from Streaming', () =>
 		Effect.gen(function* () {
-			const result = yield* simulate(
-				ReplicationConnection(replicationPlan),
-				[...successfulSetupEvents, ReplicationEvent.StopRequested],
-				{ slots: replicationSlotHandlers },
-			)
+			const trace = yield* MachineTest.run(ReplicationConnection, {
+				input: replicationPlan,
+				events: [...successfulSetupEvents, ReplicationEvent.cases.StopRequested.make({})],
+			})
 
-			expect(getStateTag(result.finalState)).toBe('Stopped')
+			expect(ReplicationStates.matches(trace.final, 'Stopped')).toBe(true)
 		}),
 	)
 })

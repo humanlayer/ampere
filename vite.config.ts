@@ -22,6 +22,7 @@ export default defineConfig({
 		jsPlugins: [
 			{ name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
 			{ name: 'anti-slop-effect', specifier: './tools/oxlint/anti-slop/effect/index.ts' },
+			{ name: 'effect-machine', specifier: '@typeonce/oxlint-plugin-effect-machine' },
 		],
 		ignorePatterns: [
 			'**/node_modules/**',
@@ -61,6 +62,13 @@ export default defineConfig({
 			'typescript/restrict-template-expressions': 'error',
 			'typescript/unbound-method': 'error',
 			'effecttsgo/any-unknown-in-error-context': 'error',
+			'effecttsgo/strict-effect-provide': 'off',
+			'effect-machine/no-async-planning-callback': 'error',
+			'effect-machine/no-browser-api-in-planning': 'error',
+			'effect-machine/no-conflicting-invocation-identity': 'error',
+			'effect-machine/no-nondeterministic-planning': 'error',
+			'effect-machine/no-redundant-resolve': 'error',
+			'effect-machine/prefer-inline-handle': 'error',
 			'vitest/expect-expect': 'off',
 			'vitest/no-conditional-expect': 'off',
 			'vitest/no-disabled-tests': 'off',
@@ -82,7 +90,11 @@ export default defineConfig({
 			'anti-slop/no-unsafe-dictionary-type': 'error',
 			'anti-slop/no-widen-then-assert': 'error',
 			'anti-slop/require-safety-comment-for-type-assertion': 'error',
+			'anti-slop-effect/no-manual-tag-comparison': 'error',
+			'anti-slop-effect/no-manual-tagged-construction': 'error',
 			'anti-slop-effect/no-service-constructor-imports': 'error',
+			'anti-slop-effect/prefer-effect-match': 'error',
+			'anti-slop-effect/prefer-tagged-error-handling': 'error',
 		},
 	},
 	// Oxfmt.

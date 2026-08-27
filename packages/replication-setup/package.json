@@ -12,9 +12,9 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@typeonce/effect-machine": "catalog:",
 		"drizzle-orm": "catalog:",
-		"effect": "catalog:",
-		"effect-machine": "catalog:"
+		"effect": "catalog:"
 	},
 	"devDependencies": {
 		"@ampere/vitest-config": "workspace:*",

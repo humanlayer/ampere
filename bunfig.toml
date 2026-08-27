@@ -23,7 +23,14 @@ minimumReleaseAgeExcludes = [
 	"@effect/vitest",
 	"@effect/opentelemetry",
 	"@effect/sql-pg",
+	"@oxlint/plugins",
+	"@typeonce/effect-machine",
+	"@typeonce/effect-machine-devtools",
+	"@typeonce/oxlint-plugin-effect-machine",
 	"drizzle-orm",
+	"oxlint",
+	"vite-plus",
+	"vitest",
 ]
 
 [console]

@@ -62,6 +62,7 @@ describe('PostgreSQL through Effect SQL', () => {
 
 			const all = yield* db.select().from(todos)
 			expect(all).toHaveLength(1)
+			return undefined
 		}).pipe(Effect.provide(PgLive)),
 	)
 
@@ -100,6 +101,7 @@ describe('PostgreSQL through Effect SQL', () => {
 				.values({ todoId: todo.id, body: 'a related row' })
 				.returning()
 			expect(comment?.todoId).toBe(todo.id)
+			return undefined
 		}).pipe(Effect.provide(PgLive)),
 	)
 })
