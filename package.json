@@ -50,5 +50,8 @@
 		"@types/node": "^25.3.5",
 		"drizzle-orm": "1.0.0-rc.5-169397b",
 		"@effect/sql-pg": "4.0.0-rc.110"
+	},
+	"patchedDependencies": {
+		"effect-machine@0.17.1": "patches/effect-machine@0.17.1.patch"
 	}
 }

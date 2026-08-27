@@ -27,7 +27,7 @@ const formatPostgresLsnText = (lsn: bigint): string => {
 	return `${segment}/${offset}`
 }
 
-const Lsn = Schema.String.pipe(
+export const Lsn = Schema.String.pipe(
 	Schema.check(Schema.isPattern(/^[0-9A-Fa-f]{1,8}\/[0-9A-Fa-f]{1,8}$/)),
 	Schema.decodeTo(PostgresLsnValue, {
 		decode: SchemaGetter.transform(parsePostgresLsnText),
@@ -42,7 +42,7 @@ const PositiveInteger = Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)))
 /**
  * Defines a relation that is being replicated - schema (public?) + table + partition columns
  */
-const ReplicationRelation = Schema.TaggedStruct('ReplicationRelation', {
+export const ReplicationRelation = Schema.TaggedStruct('ReplicationRelation', {
 	schemaName: PostgresIdentifier,
 	tableName: PostgresIdentifier,
 	partitionColumnNames: Schema.NonEmptyArray(PostgresIdentifier),
@@ -51,27 +51,27 @@ const ReplicationRelation = Schema.TaggedStruct('ReplicationRelation', {
 /**
  * Define the what we're replicating (relations) and where it comes from
  */
-const ReplicationPlan = Schema.TaggedStruct('ReplicationPlan', {
+export const ReplicationPlan = Schema.TaggedStruct('ReplicationPlan', {
 	slotName: PostgresIdentifier,
 	publicationName: PostgresIdentifier,
 	relations: Schema.NonEmptyArray(ReplicationRelation),
 })
 
-const ReplicationSourceIdentity = Schema.TaggedStruct('ReplicationSourceIdentity', {
+export const ReplicationSourceIdentity = Schema.TaggedStruct('ReplicationSourceIdentity', {
 	systemIdentifier: Schema.NonEmptyString,
 	timelineId: PositiveInteger,
 	databaseName: Schema.NonEmptyString,
 	currentWalFlushLsn: Lsn,
 })
 
-const ReplicationServerInfo = Schema.TaggedStruct('ReplicationServerInfo', {
+export const ReplicationServerInfo = Schema.TaggedStruct('ReplicationServerInfo', {
 	serverVersionNumber: PositiveInteger,
 	backendProcessId: PositiveInteger,
 	walSenderTimeoutMilliseconds: NonNegativeInteger,
 	keepaliveIntervalMilliseconds: PositiveInteger,
 })
 
-const ReplicationSlotPosition = Schema.TaggedStruct('ReplicationSlotPosition', {
+export const ReplicationSlotPosition = Schema.TaggedStruct('ReplicationSlotPosition', {
 	confirmedFlushLsn: Lsn,
 	slotWasCreated: Schema.Boolean,
 })
