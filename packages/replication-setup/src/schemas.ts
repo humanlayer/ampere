@@ -51,6 +51,27 @@ export const ReplicationSourceIdentity = Schema.TaggedStruct('ReplicationSourceI
 	currentWalFlushLsn: Lsn,
 })
 
+/**
+ * Result row from IDENTIFY_SYSTEM
+ */
+export const IdentifySystemResult = Schema.Struct({
+	systemid: Schema.NonEmptyString,
+	timeline: Schema.FiniteFromString.pipe(Schema.check(Schema.isInt(), Schema.isGreaterThan(0))),
+	xlogpos: Lsn,
+	dbname: Schema.NonEmptyString,
+})
+
+/**
+ * Result from readServerInfo
+ */
+export const ReadServerInfoResult = Schema.Struct({
+	server_version_number: Schema.FiniteFromString.pipe(Schema.check(Schema.isInt(), Schema.isGreaterThan(0))),
+	backend_process_id: PositiveInteger,
+	wal_sender_timeout_milliseconds: Schema.FiniteFromString.pipe(
+		Schema.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0)),
+	),
+})
+
 export const ReplicationServerInfo = Schema.TaggedStruct('ReplicationServerInfo', {
 	serverVersionNumber: PositiveInteger,
 	backendProcessId: PositiveInteger,
@@ -163,3 +184,68 @@ export const ReplicationEventFields = {
 	SourceRejected: { reason: SourceRejectionReason },
 	StopRequested: {},
 } as const
+
+export const ReplicationStateSchema = Schema.TaggedUnion(ReplicationStateFields)
+export const ReplicationEventSchema = Schema.TaggedUnion(ReplicationEventFields)
+
+export const SlotLeaseOutcome = Schema.TaggedUnion({
+	Acquired: {},
+	WaitRequired: {},
+})
+
+export const ReplicationOperationFailure = Schema.TaggedUnion({
+	SessionUnavailable: { reason: ReconnectReason },
+	SourceRejected: { reason: SourceRejectionReason },
+})
+
+export const AcquireSlotLeaseInput = Schema.Struct({
+	slotName: PostgresIdentifier,
+})
+
+export const EnsureReplicationContractInput = Schema.Struct({
+	publicationName: PostgresIdentifier,
+	relations: ReplicationPlan.fields.relations,
+	serverVersionNumber: PositiveInteger,
+})
+
+export const EnsureReplicationSlotInput = Schema.Struct({
+	slotName: PostgresIdentifier,
+})
+
+export const StartPgOutputInput = Schema.Struct({
+	slotName: PostgresIdentifier,
+	publicationName: PostgresIdentifier,
+})
+
+export const ConsumePgOutputInput = Schema.Struct({
+	keepaliveIntervalMilliseconds: PositiveInteger,
+	initialSafeFlushLsn: PostgresLsnValue,
+})
+
+enum ReplicationActivityId {
+	OpenReplicationSession = 'replication.open_session',
+	IdentifySource = 'replication.identify_source',
+	ReadServerInfo = 'replication.read_server_info',
+	AcquireSlotLease = 'replication.acquire_slot_lease',
+	WaitToRetrySlotLease = 'replication.slot_lease_retry',
+	EnsureReplicationContract = 'replication.ensure_contract',
+	EnsureReplicationSlot = 'replication.ensure_slot',
+	PinOutputSettings = 'replication.pin_output_settings',
+	StartPgOutput = 'replication.start_pgoutput',
+	ConsumePgOutput = 'replication.consume_pgoutput',
+}
+
+export const ReplicationActivity = Schema.Enum(ReplicationActivityId)
+
+export enum ConnectionPhaseId {
+	Connecting = 'Connecting',
+	IdentifyingSource = 'IdentifyingSource',
+	ReadingServerInfo = 'ReadingServerInfo',
+	AcquiringSlotLease = 'AcquiringSlotLease',
+	WaitingToRetrySlotLease = 'WaitingToRetrySlotLease',
+	EnsuringReplicationContract = 'EnsuringReplicationContract',
+	EnsuringReplicationSlot = 'EnsuringReplicationSlot',
+	PinningOutputSettings = 'PinningOutputSettings',
+	StartingPgOutput = 'StartingPgOutput',
+	Streaming = 'Streaming',
+}

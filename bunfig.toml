@@ -22,7 +22,6 @@ minimumReleaseAgeExcludes = [
 	"@effect/platform-node-shared",
 	"@effect/vitest",
 	"@effect/opentelemetry",
-	"@effect/sql-pg",
 	"@oxlint/plugins",
 	"@typeonce/effect-machine",
 	"@typeonce/effect-machine-devtools",

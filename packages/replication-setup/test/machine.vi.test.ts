@@ -3,17 +3,16 @@ import { MachineTest } from '@typeonce/effect-machine/testing'
 import { Effect, Option, Schema } from 'effect'
 import { expect } from 'vitest'
 
+import { ReplicationConnection, ReplicationStates } from '../src/machine.ts'
 import {
 	Lsn,
-	ReplicationConnection,
+	ReplicationEventFields,
 	ReplicationPlan,
 	ReplicationRelation,
 	ReplicationServerInfo,
 	ReplicationSlotPosition,
 	ReplicationSourceIdentity,
-	ReplicationStates,
-} from '../src/machine.ts'
-import { ReplicationEventFields } from '../src/schemas.ts'
+} from '../src/schemas.ts'
 
 const ReplicationEvent = Schema.TaggedUnion(ReplicationEventFields)
 
@@ -40,7 +39,7 @@ const sourceIdentified = ReplicationEvent.cases.SourceIdentified.make({
 
 const serverInfoRead = ReplicationEvent.cases.ServerInfoRead.make({
 	serverInfo: ReplicationServerInfo.make({
-		serverVersionNumber: 170000,
+		serverVersionNumber: 180000,
 		backendProcessId: 1,
 		walSenderTimeoutMilliseconds: 60_000,
 		keepaliveIntervalMilliseconds: 15_000,

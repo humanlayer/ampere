@@ -1,6 +1,6 @@
 services:
     postgres:
-        image: postgres:17
+        image: postgres:18
         # Logical replication so downstream consumers can follow the WAL.
         command: postgres -c wal_level=logical
         environment:

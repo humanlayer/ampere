@@ -4,8 +4,7 @@
 	"private": true,
 	"type": "module",
 	"exports": {
-		"./schema": "./src/schema.ts",
-		"./pg": "./src/pg.layer.ts"
+		"./schema": "./src/schema.ts"
 	},
 	"scripts": {
 		"build": "echo 'No build required - library package'",
@@ -13,7 +12,6 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@effect/sql-pg": "catalog:",
 		"drizzle-orm": "catalog:",
 		"effect": "catalog:"
 	},

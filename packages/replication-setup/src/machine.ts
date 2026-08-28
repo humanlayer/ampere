@@ -1,71 +1,16 @@
 import { Machine } from '@typeonce/effect-machine'
-import { Context, Match, Schema } from 'effect'
-import type { Effect } from 'effect'
+import { Match } from 'effect'
 
 import {
-	ReconnectReason,
-	ReplicationEventFields,
+	ConnectionPhaseId,
+	ReplicationActivity,
+	ReplicationEventSchema,
 	ReplicationPlan,
-	ReplicationStateFields,
+	ReplicationStateSchema,
 	SlotLeaseRetry,
-	SourceRejectionReason,
 } from './schemas.ts'
-import type {
-	PostgresLsnValue,
-	ReplicationServerInfo,
-	ReplicationSlotPosition,
-	ReplicationSourceIdentity,
-} from './schemas.ts'
-
-export {
-	Lsn,
-	ReplicationPlan,
-	ReplicationRelation,
-	ReplicationServerInfo,
-	ReplicationSlotPosition,
-	ReplicationSourceIdentity,
-} from './schemas.ts'
-
-const ReplicationStateSchema = Schema.TaggedUnion(ReplicationStateFields)
-const ReplicationEventSchema = Schema.TaggedUnion(ReplicationEventFields)
-
-const SlotLeaseOutcome = Schema.TaggedUnion({
-	Acquired: {},
-	WaitRequired: {},
-})
-
-const ReplicationOperationFailure = Schema.TaggedUnion({
-	SessionUnavailable: { reason: ReconnectReason },
-	SourceRejected: { reason: SourceRejectionReason },
-})
-
-enum ReplicationActivityId {
-	OpenReplicationSession = 'replication.open_session',
-	IdentifySource = 'replication.identify_source',
-	ReadServerInfo = 'replication.read_server_info',
-	AcquireSlotLease = 'replication.acquire_slot_lease',
-	WaitToRetrySlotLease = 'replication.slot_lease_retry',
-	EnsureReplicationContract = 'replication.ensure_contract',
-	EnsureReplicationSlot = 'replication.ensure_slot',
-	PinOutputSettings = 'replication.pin_output_settings',
-	StartPgOutput = 'replication.start_pgoutput',
-	ConsumePgOutput = 'replication.consume_pgoutput',
-}
-
-const ReplicationActivity = Schema.Enum(ReplicationActivityId)
-
-enum ConnectionPhaseId {
-	Connecting = 'Connecting',
-	IdentifyingSource = 'IdentifyingSource',
-	ReadingServerInfo = 'ReadingServerInfo',
-	AcquiringSlotLease = 'AcquiringSlotLease',
-	WaitingToRetrySlotLease = 'WaitingToRetrySlotLease',
-	EnsuringReplicationContract = 'EnsuringReplicationContract',
-	EnsuringReplicationSlot = 'EnsuringReplicationSlot',
-	PinningOutputSettings = 'PinningOutputSettings',
-	StartingPgOutput = 'StartingPgOutput',
-	Streaming = 'Streaming',
-}
+import type { ReconnectReason, ReplicationOperationFailure, SourceRejectionReason } from './schemas.ts'
+import { ReplicationOperations } from './service.ts'
 
 export const ReplicationStates = Machine.states({
 	Connecting: ReplicationStateSchema.cases.Connecting,
@@ -84,39 +29,6 @@ export const ReplicationStates = Machine.states({
 })
 
 export const ReplicationEvents = Machine.events(ReplicationEventSchema)
-
-export interface ReplicationOperationsApi {
-	readonly openReplicationSession: Effect.Effect<void, typeof ReplicationOperationFailure.Type>
-	readonly identifySource: Effect.Effect<
-		typeof ReplicationSourceIdentity.Type,
-		typeof ReplicationOperationFailure.Type
-	>
-	readonly readServerInfo: Effect.Effect<typeof ReplicationServerInfo.Type, typeof ReplicationOperationFailure.Type>
-	readonly acquireSlotLease: (input: {
-		readonly slotName: string
-	}) => Effect.Effect<typeof SlotLeaseOutcome.Type, typeof ReplicationOperationFailure.Type>
-	readonly ensureReplicationContract: (input: {
-		readonly publicationName: string
-		readonly relations: typeof ReplicationPlan.Type.relations
-		readonly serverVersionNumber: number
-	}) => Effect.Effect<void, typeof ReplicationOperationFailure.Type>
-	readonly ensureReplicationSlot: (input: {
-		readonly slotName: string
-	}) => Effect.Effect<typeof ReplicationSlotPosition.Type, typeof ReplicationOperationFailure.Type>
-	readonly pinOutputSettings: Effect.Effect<void, typeof ReplicationOperationFailure.Type>
-	readonly startPgOutput: (input: {
-		readonly slotName: string
-		readonly publicationName: string
-	}) => Effect.Effect<void, typeof ReplicationOperationFailure.Type>
-	readonly consumePgOutput: (input: {
-		readonly keepaliveIntervalMilliseconds: number
-		readonly initialSafeFlushLsn: typeof PostgresLsnValue.Type
-	}) => Effect.Effect<never, typeof ReplicationOperationFailure.Type>
-}
-
-export class ReplicationOperations extends Context.Service<ReplicationOperations, ReplicationOperationsApi>()(
-	'@ampere/replication/ReplicationOperations',
-) {}
 
 const calculateSlotLeaseRetryDelayMilliseconds = (attempt: number): number => Math.min(100 * 2 ** (attempt - 1), 5_000)
 
@@ -149,7 +61,7 @@ export const ReplicationConnection = Machine.make({
 		invoke: (from) =>
 			from
 				.effect(ReplicationActivity.enums.OpenReplicationSession, () =>
-					ReplicationOperations.use((operations) => operations.openReplicationSession),
+					ReplicationOperations.use((operations) => operations.openReplicationSession()),
 				)
 				.onDone((to) =>
 					to.none.resolve((_context, enqueue) => {
@@ -181,7 +93,7 @@ export const ReplicationConnection = Machine.make({
 		invoke: (from) =>
 			from
 				.effect(ReplicationActivity.enums.IdentifySource, () =>
-					ReplicationOperations.use((operations) => operations.identifySource),
+					ReplicationOperations.use((operations) => operations.identifySource()),
 				)
 				.onDone((to) =>
 					to.none.resolve(({ output }, enqueue) => {
@@ -217,7 +129,7 @@ export const ReplicationConnection = Machine.make({
 		invoke: (from) =>
 			from
 				.effect(ReplicationActivity.enums.ReadServerInfo, () =>
-					ReplicationOperations.use((operations) => operations.readServerInfo),
+					ReplicationOperations.use((operations) => operations.readServerInfo()),
 				)
 				.onDone((to) =>
 					to.none.resolve(({ output }, enqueue) => {
@@ -445,7 +357,7 @@ export const ReplicationConnection = Machine.make({
 		invoke: (from) =>
 			from
 				.effect(ReplicationActivity.enums.PinOutputSettings, () =>
-					ReplicationOperations.use((operations) => operations.pinOutputSettings),
+					ReplicationOperations.use((operations) => operations.pinOutputSettings()),
 				)
 				.onDone((to) =>
 					to.none.resolve((_context, enqueue) => {

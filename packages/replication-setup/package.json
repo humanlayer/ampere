@@ -13,13 +13,14 @@
 	},
 	"dependencies": {
 		"@typeonce/effect-machine": "catalog:",
-		"drizzle-orm": "catalog:",
-		"effect": "catalog:"
+		"effect": "catalog:",
+		"pg": "catalog:"
 	},
 	"devDependencies": {
 		"@ampere/vitest-config": "workspace:*",
 		"@effect/vitest": "catalog:",
 		"@types/bun": "catalog:",
+		"@types/pg": "catalog:",
 		"vitest": "catalog:"
 	}
 }

@@ -11,8 +11,8 @@ Bun monorepo (`apps/*`, `packages/*`) built on Effect v4 and the Vite+ toolchain
 
 ## Database
 
-- Local PostgreSQL 17 via `docker compose up -d` (port 55432, `wal_level=logical` for replication-log consumers). Tests and `@ampere/db`'s `PgLive` layer default to it; override with `DATABASE_URL`.
-- Drizzle v1 RC (`rc5` dist-tag) with the Effect driver: `drizzle-orm/effect-postgres` over `@effect/sql-pg`. Queries are yieldable Effects. The `rc` dist-tag (rc.4) is incompatible with effect 4.0.0-rc.110 — stay on the `rc5` build line.
+- Local PostgreSQL 18 via `docker compose up -d` (port 55432, `wal_level=logical` for replication-log consumers).
+- Logical replication uses a directly pinned `pg` dependency. Drizzle remains only for declarative application table schemas in `@ampere/db`.
 
 ## Effect
 
