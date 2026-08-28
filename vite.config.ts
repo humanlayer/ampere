@@ -40,6 +40,14 @@ export default defineConfig({
 			'.windsurf/**',
 			'tools/oxlint/anti-slop/**',
 		],
+		overrides: [
+			{
+				files: ['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
+				rules: {
+					'effecttsgo/strict-effect-provide': 'off',
+				},
+			},
+		],
 		rules: {
 			'oxc/no-barrel-file': 'error',
 			'typescript/no-explicit-any': 'error',
@@ -62,7 +70,7 @@ export default defineConfig({
 			'typescript/restrict-template-expressions': 'error',
 			'typescript/unbound-method': 'error',
 			'effecttsgo/any-unknown-in-error-context': 'error',
-			'effecttsgo/strict-effect-provide': 'off',
+			'effecttsgo/strict-effect-provide': 'error',
 			'effect-machine/no-async-planning-callback': 'error',
 			'effect-machine/no-browser-api-in-planning': 'error',
 			'effect-machine/no-conflicting-invocation-identity': 'error',
