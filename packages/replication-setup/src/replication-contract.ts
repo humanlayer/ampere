@@ -41,15 +41,15 @@ interface ReplicationRelationConnectionInput {
 
 type ReplicationRelationInput = ReplicationPublicationInput & ReplicationRelationConnectionInput
 
-interface EnsureReplicationContractEffectInput {
+export interface EnsureReplicationContractEffectInput {
 	readonly connection: ReplicationContractConnection
 	readonly contract: typeof EnsureReplicationContractInput.Type
 }
 
 const PostgresErrorCode = Schema.Struct({ code: Schema.String })
-const supportedPostgresMajorVersion = 18
+export const supportedPostgresMajorVersion = 18
 
-const compareReplicationRelations = (
+export const compareReplicationRelations = (
 	left: typeof ReplicationRelation.Type,
 	right: typeof ReplicationRelation.Type,
 ): number => {
@@ -296,28 +296,3 @@ export const ensureReplicationRelation = Effect.fn('replication_contract.ensure_
 					: rollbackRelationConfiguration(connection),
 		),
 )
-
-export const ensureReplicationContract = Effect.fn('replication_contract.ensure_contract')(function* ({
-	connection,
-	contract,
-}: EnsureReplicationContractEffectInput) {
-	const postgresMajorVersion = Math.trunc(contract.serverVersionNumber / 10_000)
-	if (postgresMajorVersion !== supportedPostgresMajorVersion) {
-		return yield* Effect.fail(
-			ReplicationOperationFailure.cases.SourceRejected.make({ reason: 'unsupported-postgres-version' }),
-		)
-	}
-
-	yield* ensureReplicationPublication({ connection, publicationName: contract.publicationName })
-	yield* Effect.forEach(
-		contract.relations.toSorted(compareReplicationRelations),
-		(relation) =>
-			ensureReplicationRelation({
-				connection,
-				publicationName: contract.publicationName,
-				relation,
-			}),
-		{ concurrency: 1, discard: true },
-	)
-	return yield* Effect.void
-})

@@ -1,5 +1,5 @@
 import { Event, Machine, State } from '@humanlayer/effect-machine'
-import { Cause, Effect, Match, Option } from 'effect'
+import { Cause, Effect, Match, Option, Stream } from 'effect'
 
 import {
 	ConnectionPhaseId,
@@ -271,6 +271,7 @@ export const makeReplicationConnection = ({ plan }: MakeReplicationConnectionInp
 					operations.startPgOutput({
 						slotName: state.plan.slotName,
 						publicationName: state.plan.publicationName,
+						startLsn: state.slotPosition.confirmedFlushLsn,
 					}),
 				),
 			{
@@ -298,11 +299,14 @@ export const makeReplicationConnection = ({ plan }: MakeReplicationConnectionInp
 		.spawn(ReplicationStates.Streaming, ({ self, state }) =>
 			ReplicationOperations.use((operations) =>
 				operations
-					.consumePgOutput({
+					.streamReplicationFrames({
 						keepaliveIntervalMilliseconds: state.serverInfo.keepaliveIntervalMilliseconds,
 						initialSafeFlushLsn: state.slotPosition.confirmedFlushLsn,
 					})
-					.pipe(Effect.catch((failure) => self.send(operationFailureToEvent(failure)))),
+					.pipe(
+						Stream.runDrain,
+						Effect.catch((failure) => self.send(operationFailureToEvent(failure))),
+					),
 			),
 		)
 		.on(ReplicationStates.Streaming, ReplicationEvents.SessionUnavailable, ({ event }) =>

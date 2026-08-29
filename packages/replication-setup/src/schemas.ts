@@ -275,11 +275,30 @@ export const EnsureReplicationSlotInput = Schema.Struct({
 export const StartPgOutputInput = Schema.Struct({
 	slotName: PostgresIdentifier,
 	publicationName: PostgresIdentifier,
+	startLsn: PostgresLsnValue,
 })
 
-export const ConsumePgOutputInput = Schema.Struct({
+export const StreamReplicationFramesInput = Schema.Struct({
 	keepaliveIntervalMilliseconds: PositiveInteger,
 	initialSafeFlushLsn: PostgresLsnValue,
+})
+
+export const AcknowledgeReplicationLsnInput = Schema.Struct({
+	safeFlushLsn: PostgresLsnValue,
+})
+
+export const ReplicationProtocolFrame = Schema.TaggedUnion({
+	XLogData: {
+		walStart: PostgresLsnValue,
+		serverWalEnd: PostgresLsnValue,
+		serverTimestampMicroseconds: Schema.BigInt,
+		payload: Schema.Uint8Array,
+	},
+	PrimaryKeepalive: {
+		serverWalEnd: PostgresLsnValue,
+		serverTimestampMicroseconds: Schema.BigInt,
+		replyRequested: Schema.Boolean,
+	},
 })
 
 enum ReplicationActivityId {

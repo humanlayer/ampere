@@ -1,8 +1,18 @@
 import { Config, Effect, Layer, Option, Redacted, Ref, Schema, Semaphore } from 'effect'
 import { Client, escapeLiteral } from 'pg'
 
-import { ensureReplicationContract as ensureReplicationContractEffect } from './replication-contract.ts'
-import type { ReplicationContractConnection } from './replication-contract.ts'
+import { pinOutputSettings as pinOutputSettingsEffect } from './output-settings.ts'
+import type { OutputSettingsConnection } from './output-settings.ts'
+import {
+	compareReplicationRelations,
+	supportedPostgresMajorVersion,
+	ensureReplicationPublication,
+	ensureReplicationRelation,
+	type ReplicationContractConnection,
+} from './replication-contract'
+import { validateReplicationProtocolConnection } from './replication-protocol.ts'
+import { ensureReplicationSlot as ensureReplicationSlotEffect } from './replication-slot.ts'
+import type { ReplicationSlotConnection } from './replication-slot.ts'
 import {
 	AcquireSlotLeaseResult,
 	IdentifySystemResult,
@@ -12,12 +22,9 @@ import {
 	ReplicationSlotLeaseAlreadyAcquired,
 	ReplicationSourceIdentity,
 	SlotLeaseOutcome,
-} from './schemas.ts'
+} from './schemas'
 import { ReplicationOperations } from './service'
 import type { ReplicationOperationsApi } from './service'
-
-const notImplemented = (operation: string): Effect.Effect<never> =>
-	Effect.die(new Error(`Replication operation ${operation} is not implemented`))
 
 export const ReplicationOperationsLayer = Layer.effect(
 	ReplicationOperations,
@@ -45,6 +52,13 @@ export const ReplicationOperationsLayer = Layer.effect(
 		const replicationContractConnection: ReplicationContractConnection = {
 			query: (queryText) => connection.query(queryText),
 		}
+		const replicationSlotConnection: ReplicationSlotConnection = {
+			query: (queryText) => connection.query(queryText),
+		}
+		const outputSettingsConnection: OutputSettingsConnection = {
+			query: (queryText) => connection.query(queryText),
+		}
+		const replicationProtocolConnection = yield* validateReplicationProtocolConnection(connection)
 
 		// On close of scope, if a slot has been acquired we release it
 		yield* Effect.addFinalizer(() =>
@@ -180,17 +194,46 @@ export const ReplicationOperationsLayer = Layer.effect(
 					}),
 				),
 			),
-			ensureReplicationContract: (contract) =>
-				ensureReplicationContractEffect({ connection: replicationContractConnection, contract }),
-			ensureReplicationSlot: Effect.fn('replication_operations.ensure_replication_slot')(() =>
-				notImplemented('ensureReplicationSlot'),
+			ensureReplicationContract: Effect.fn('replication_operations.ensure_replication_contract')(
+				function* (contract) {
+					const postgresMajorVersion = Math.trunc(contract.serverVersionNumber / 10_000)
+					if (postgresMajorVersion !== supportedPostgresMajorVersion) {
+						return yield* Effect.fail(
+							ReplicationOperationFailure.cases.SourceRejected.make({
+								reason: 'unsupported-postgres-version',
+							}),
+						)
+					}
+
+					yield* ensureReplicationPublication({
+						connection: replicationContractConnection,
+						publicationName: contract.publicationName,
+					})
+					yield* Effect.forEach(
+						contract.relations.toSorted(compareReplicationRelations),
+						(relation) =>
+							ensureReplicationRelation({
+								connection: replicationContractConnection,
+								publicationName: contract.publicationName,
+								relation,
+							}),
+						{ concurrency: 1, discard: true },
+					)
+					return yield* Effect.void
+				},
+			),
+			ensureReplicationSlot: Effect.fn('replication_operations.ensure_replication_slot')(({ slotName }) =>
+				ensureReplicationSlotEffect({ connection: replicationSlotConnection, slotName }),
 			),
 			pinOutputSettings: Effect.fn('replication_operations.pin_output_settings')(() =>
-				notImplemented('pinOutputSettings'),
+				pinOutputSettingsEffect({ connection: outputSettingsConnection }),
 			),
-			startPgOutput: Effect.fn('replication_operations.start_pgoutput')(() => notImplemented('startPgOutput')),
-			consumePgOutput: Effect.fn('replication_operations.consume_pgoutput')(() =>
-				notImplemented('consumePgOutput'),
+			startPgOutput: Effect.fn('replication_operations.start_pgoutput')((input) =>
+				replicationProtocolConnection.startPgOutput(input),
+			),
+			streamReplicationFrames: (input) => replicationProtocolConnection.streamReplicationFrames(input),
+			acknowledgeReplicationLsn: Effect.fn('replication_operations.acknowledge_replication_lsn')((input) =>
+				replicationProtocolConnection.acknowledgeReplicationLsn(input),
 			),
 		}
 

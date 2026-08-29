@@ -1,18 +1,20 @@
 /** @effect-diagnostics lazyEffect:skip-file */
 import { Context } from 'effect'
-import type { Effect } from 'effect'
+import type { Effect, Stream } from 'effect'
 
 import type {
 	AcquireSlotLeaseInput,
-	ConsumePgOutputInput,
+	AcknowledgeReplicationLsnInput,
 	EnsureReplicationContractInput,
 	EnsureReplicationSlotInput,
 	ReplicationOperationFailure,
+	ReplicationProtocolFrame,
 	ReplicationServerInfo,
 	ReplicationSlotPosition,
 	ReplicationSourceIdentity,
 	SlotLeaseOutcome,
 	StartPgOutputInput,
+	StreamReplicationFramesInput,
 } from './schemas.ts'
 
 export interface ReplicationOperationsApi {
@@ -38,9 +40,12 @@ export interface ReplicationOperationsApi {
 	readonly startPgOutput: (
 		input: typeof StartPgOutputInput.Type,
 	) => Effect.Effect<void, typeof ReplicationOperationFailure.Type>
-	readonly consumePgOutput: (
-		input: typeof ConsumePgOutputInput.Type,
-	) => Effect.Effect<never, typeof ReplicationOperationFailure.Type>
+	readonly streamReplicationFrames: (
+		input: typeof StreamReplicationFramesInput.Type,
+	) => Stream.Stream<typeof ReplicationProtocolFrame.Type, typeof ReplicationOperationFailure.Type>
+	readonly acknowledgeReplicationLsn: (
+		input: typeof AcknowledgeReplicationLsnInput.Type,
+	) => Effect.Effect<void, typeof ReplicationOperationFailure.Type>
 }
 
 export class ReplicationOperations extends Context.Service<ReplicationOperations, ReplicationOperationsApi>()(
