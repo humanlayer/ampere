@@ -214,30 +214,52 @@ export class ReplicationSlotLeaseAlreadyAcquired extends Schema.TaggedError<Repl
 	},
 ) {}
 
-export class CreatePublicationAlreadyExists extends Schema.TaggedError<CreatePublicationAlreadyExists>()(
-	'CreatePublicationAlreadyExists',
-	{ cause: Schema.Defect() },
+export const ReplicationContractQueryOperation = Schema.Literals([
+	'create-publication',
+	'read-publication-configuration',
+	'begin-relation-configuration',
+	'add-relation-to-publication',
+	'set-relation-replica-identity-full',
+	'read-relation-configuration',
+	'commit-relation-configuration',
+	'rollback-relation-configuration',
+])
+
+export class ReplicationContractAlreadyConfigured extends Schema.TaggedError<ReplicationContractAlreadyConfigured>()(
+	'ReplicationContractAlreadyConfigured',
+	{
+		operation: ReplicationContractQueryOperation,
+		cause: Schema.Defect(),
+	},
 ) {}
 
-export class CreatePublicationPermissionDenied extends Schema.TaggedError<CreatePublicationPermissionDenied>()(
-	'CreatePublicationPermissionDenied',
-	{ cause: Schema.Defect() },
+export class ReplicationContractPermissionDenied extends Schema.TaggedError<ReplicationContractPermissionDenied>()(
+	'ReplicationContractPermissionDenied',
+	{
+		operation: ReplicationContractQueryOperation,
+		cause: Schema.Defect(),
+	},
 ) {}
 
-export class CreatePublicationFailed extends Schema.TaggedError<CreatePublicationFailed>()('CreatePublicationFailed', {
-	cause: Schema.Defect(),
-}) {}
-
-export class ReadPublicationConfigurationFailed extends Schema.TaggedError<ReadPublicationConfigurationFailed>()(
-	'ReadPublicationConfigurationFailed',
-	{ cause: Schema.Defect() },
+export class ReplicationContractQueryFailed extends Schema.TaggedError<ReplicationContractQueryFailed>()(
+	'ReplicationContractQueryFailed',
+	{
+		operation: ReplicationContractQueryOperation,
+		cause: Schema.Defect(),
+	},
 ) {}
 
 export const PublicationConfigurationResult = Schema.Struct({
+	puballtables: Schema.Boolean,
 	pubinsert: Schema.Boolean,
 	pubupdate: Schema.Boolean,
 	pubdelete: Schema.Boolean,
 	pubtruncate: Schema.Boolean,
+})
+
+export const ReplicationRelationConfigurationResult = Schema.Struct({
+	publication_member: Schema.Boolean,
+	replica_identity_full: Schema.Boolean,
 })
 
 export const EnsureReplicationContractInput = Schema.Struct({

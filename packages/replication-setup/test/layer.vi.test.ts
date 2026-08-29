@@ -1,12 +1,18 @@
 import { describe, it } from '@effect/vitest'
 import { Cause, Context, Effect, Exit, Layer } from 'effect'
-import { Client, escapeIdentifier } from 'pg'
+import { Client, escapeIdentifier, escapeLiteral } from 'pg'
 
-import { classifyCreatePublicationError, ReplicationOperationsLayer } from '../src/layer'
+import { ReplicationOperationsLayer } from '../src/layer'
 import {
-	CreatePublicationAlreadyExists,
-	CreatePublicationFailed,
-	CreatePublicationPermissionDenied,
+	classifyReplicationContractQueryError,
+	ensureReplicationContract,
+	ensureReplicationRelation,
+} from '../src/replication-contract'
+import type { ReplicationContractConnection, ReplicationContractQueryResult } from '../src/replication-contract'
+import {
+	ReplicationContractAlreadyConfigured,
+	ReplicationContractPermissionDenied,
+	ReplicationContractQueryFailed,
 	ReplicationOperationFailure,
 	ReplicationRelation,
 	ReplicationSlotLeaseAlreadyAcquired,
@@ -28,12 +34,16 @@ const acquireAdminClient = Effect.acquireRelease(
 		),
 )
 
-const replicationContractInput = (publicationName: string) => ({
+const makeReplicationContractConnection = (client: Client): ReplicationContractConnection => ({
+	query: (queryText) => client.query(queryText),
+})
+
+const replicationContractInput = (publicationName: string, tableName = 'todos') => ({
 	publicationName,
 	relations: [
 		ReplicationRelation.make({
 			schemaName: 'public',
-			tableName: 'todos',
+			tableName,
 			partitionColumnNames: ['id'],
 		}),
 	] as const,
@@ -41,21 +51,129 @@ const replicationContractInput = (publicationName: string) => ({
 })
 
 describe('Live Layer tests', () => {
-	it('classifies create publication errors by PostgreSQL SQLSTATE', ({ expect }) => {
+	it('classifies replication contract query errors by PostgreSQL SQLSTATE', ({ expect }) => {
 		const duplicateCause = { code: '42710' }
 		const permissionCause = { code: '42501' }
 		const unexpectedCause = { code: '08006' }
 
-		expect(classifyCreatePublicationError(duplicateCause)).toStrictEqual(
-			new CreatePublicationAlreadyExists({ cause: duplicateCause }),
+		expect(classifyReplicationContractQueryError(duplicateCause, 'create-publication')).toStrictEqual(
+			new ReplicationContractAlreadyConfigured({ operation: 'create-publication', cause: duplicateCause }),
 		)
-		expect(classifyCreatePublicationError(permissionCause)).toStrictEqual(
-			new CreatePublicationPermissionDenied({ cause: permissionCause }),
+		expect(classifyReplicationContractQueryError(permissionCause, 'create-publication')).toStrictEqual(
+			new ReplicationContractPermissionDenied({ operation: 'create-publication', cause: permissionCause }),
 		)
-		expect(classifyCreatePublicationError(unexpectedCause)).toStrictEqual(
-			new CreatePublicationFailed({ cause: unexpectedCause }),
+		expect(classifyReplicationContractQueryError(unexpectedCause, 'create-publication')).toStrictEqual(
+			new ReplicationContractQueryFailed({ operation: 'create-publication', cause: unexpectedCause }),
 		)
 	})
+
+	it.effect('configures each relation transactionally in lock-safe order', ({ expect }) =>
+		Effect.gen(function* () {
+			const queries: Array<string> = []
+			const responses: Array<ReplicationContractQueryResult> = [
+				{ rows: [] },
+				{ rows: [{ publication_member: false, replica_identity_full: false }] },
+				{ rows: [] },
+				{ rows: [] },
+				{ rows: [{ publication_member: true, replica_identity_full: true }] },
+				{ rows: [] },
+			]
+			let responseIndex = 0
+			const connection: ReplicationContractConnection = {
+				query: (queryText) => {
+					queries.push(queryText)
+					const response = responses.at(responseIndex)
+					responseIndex += 1
+					return response === undefined
+						? Promise.reject(new Error(`Unexpected replication contract query: ${queryText}`))
+						: Promise.resolve(response)
+				},
+			}
+			const relation = ReplicationRelation.make({
+				schemaName: 'tenant schema',
+				tableName: 'events"archive',
+				partitionColumnNames: ['organization_id'],
+			})
+
+			yield* ensureReplicationRelation({
+				connection,
+				publicationName: 'ampere"publication',
+				relation,
+			})
+
+			expect(queries).toHaveLength(6)
+			expect(queries.at(0)).toBe('BEGIN')
+			expect(queries.at(1)).toContain('FROM pg_publication_rel AS publication_relation')
+			expect(queries.at(2)).toBe(
+				'ALTER PUBLICATION "ampere""publication" ADD TABLE ONLY "tenant schema"."events""archive"',
+			)
+			expect(queries.at(3)).toBe('ALTER TABLE ONLY "tenant schema"."events""archive" REPLICA IDENTITY FULL')
+			expect(queries.at(4)).toContain('FROM pg_publication_rel AS publication_relation')
+			expect(queries.at(5)).toBe('COMMIT')
+		}),
+	)
+
+	it.effect('rolls back relation configuration when setting replica identity fails', ({ expect }) =>
+		Effect.gen(function* () {
+			const queries: Array<string> = []
+			const connection: ReplicationContractConnection = {
+				query: (queryText) => {
+					queries.push(queryText)
+					if (queryText.includes('REPLICA IDENTITY FULL')) {
+						return Promise.reject({ code: '42501' })
+					}
+					return queryText.includes('FROM pg_publication_rel AS publication_relation')
+						? Promise.resolve({ rows: [{ publication_member: false, replica_identity_full: false }] })
+						: Promise.resolve({ rows: [] })
+				},
+			}
+			const relation = ReplicationRelation.make({
+				schemaName: 'public',
+				tableName: 'events',
+				partitionColumnNames: ['organization_id'],
+			})
+
+			const failure = yield* Effect.flip(
+				ensureReplicationRelation({ connection, publicationName: 'ampere_publication', relation }),
+			)
+
+			expect(failure).toStrictEqual(
+				ReplicationOperationFailure.cases.SourceRejected.make({
+					reason: 'replica-identity-permission-denied',
+				}),
+			)
+			expect(queries).toEqual([
+				'BEGIN',
+				expect.stringContaining('FROM pg_publication_rel AS publication_relation'),
+				'ALTER PUBLICATION "ampere_publication" ADD TABLE ONLY "public"."events"',
+				'ALTER TABLE ONLY "public"."events" REPLICA IDENTITY FULL',
+				'ROLLBACK',
+			])
+		}),
+	)
+
+	it.effect('rejects unsupported PostgreSQL versions before issuing setup SQL', ({ expect }) =>
+		Effect.gen(function* () {
+			let queryCount = 0
+			const connection: ReplicationContractConnection = {
+				query: (queryText) => {
+					queryCount += 1
+					return Promise.reject(new Error(`Unexpected replication contract query: ${queryText}`))
+				},
+			}
+			const contract = {
+				...replicationContractInput('ampere_unsupported_version_test'),
+				serverVersionNumber: 170_000,
+			}
+
+			const failure = yield* Effect.flip(ensureReplicationContract({ connection, contract }))
+
+			expect(failure).toStrictEqual(
+				ReplicationOperationFailure.cases.SourceRejected.make({ reason: 'unsupported-postgres-version' }),
+			)
+			expect(queryCount).toBe(0)
+		}),
+	)
 
 	it.effect('Connection opens successfully if container is running', ({ expect }) =>
 		Effect.gen(function* () {
@@ -172,35 +290,73 @@ describe('Live Layer tests', () => {
 		),
 	)
 
-	it.effect('creates a publication with every required operation enabled', ({ expect }) =>
+	it.effect('creates an idempotent publication contract with FULL replica identity', ({ expect }) =>
 		Effect.scoped(
 			Effect.gen(function* () {
-				const publicationName = 'ampere_create_publication_test'
+				const publicationName = 'ampere contract"publication'
+				const tableName = 'ampere contract"relation'
 				const publicationIdentifier = escapeIdentifier(publicationName)
+				const tableIdentifier = escapeIdentifier(tableName)
 				const adminClient = yield* acquireAdminClient
 				yield* Effect.promise(() => adminClient.query(`DROP PUBLICATION IF EXISTS ${publicationIdentifier}`))
+				yield* Effect.promise(() => adminClient.query(`DROP TABLE IF EXISTS ${tableIdentifier}`))
+				yield* Effect.promise(() =>
+					adminClient.query(`CREATE TABLE ${tableIdentifier} (id bigint PRIMARY KEY, value text NOT NULL)`),
+				)
 				yield* Effect.addFinalizer(() =>
-					Effect.promise(() => adminClient.query(`DROP PUBLICATION IF EXISTS ${publicationIdentifier}`)).pipe(
-						Effect.asVoid,
-						Effect.catchCause((cause) => Effect.logWarning('Failed to clean up test publication', cause)),
+					Effect.all(
+						[
+							Effect.promise(() =>
+								adminClient.query(`DROP PUBLICATION IF EXISTS ${publicationIdentifier}`),
+							),
+							Effect.promise(() => adminClient.query(`DROP TABLE IF EXISTS ${tableIdentifier}`)),
+						],
+						{ concurrency: 1, discard: true },
+					).pipe(
+						Effect.catchCause((cause) =>
+							Effect.logWarning('Failed to clean up replication contract test', cause),
+						),
 					),
 				)
 
+				const contract = replicationContractInput(publicationName, tableName)
 				const context = yield* Layer.build(Layer.fresh(ReplicationOperationsLayer))
 				const operations = Context.get(context, ReplicationOperations)
 				yield* operations.openReplicationSession()
-				const result = yield* operations.ensureReplicationContract(replicationContractInput(publicationName))
+				const result = yield* operations.ensureReplicationContract(contract)
+				yield* operations.ensureReplicationContract(contract)
 
 				expect(result).toBeUndefined()
-				const publicationRows = yield* Effect.promise(() =>
+				const contractRows = yield* Effect.promise(() =>
 					adminClient.query(
-						`SELECT pubinsert, pubupdate, pubdelete, pubtruncate
-						FROM pg_publication
-						WHERE pubname = '${publicationName}'`,
+						`SELECT
+							publication.puballtables,
+							publication.pubinsert,
+							publication.pubupdate,
+							publication.pubdelete,
+							publication.pubtruncate,
+							relation.relreplident,
+							COUNT(*)::int AS publication_memberships
+						FROM pg_publication AS publication
+						JOIN pg_publication_rel AS publication_relation ON publication_relation.prpubid = publication.oid
+						JOIN pg_class AS relation ON relation.oid = publication_relation.prrelid
+						JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+						WHERE publication.pubname = ${escapeLiteral(publicationName)}
+							AND namespace.nspname = 'public'
+							AND relation.relname = ${escapeLiteral(tableName)}
+						GROUP BY publication.oid, relation.oid`,
 					),
 				)
-				expect(publicationRows.rows).toStrictEqual([
-					{ pubinsert: true, pubupdate: true, pubdelete: true, pubtruncate: true },
+				expect(contractRows.rows).toStrictEqual([
+					{
+						puballtables: false,
+						pubinsert: true,
+						pubupdate: true,
+						pubdelete: true,
+						pubtruncate: true,
+						relreplident: 'f',
+						publication_memberships: 1,
+					},
 				])
 			}),
 		),
@@ -223,11 +379,11 @@ describe('Live Layer tests', () => {
 					),
 				)
 
-				const context = yield* Layer.build(Layer.fresh(ReplicationOperationsLayer))
-				const operations = Context.get(context, ReplicationOperations)
-				yield* operations.openReplicationSession()
 				const failure = yield* Effect.flip(
-					operations.ensureReplicationContract(replicationContractInput(publicationName)),
+					ensureReplicationContract({
+						connection: makeReplicationContractConnection(adminClient),
+						contract: replicationContractInput(publicationName),
+					}),
 				)
 
 				expect(failure).toStrictEqual(

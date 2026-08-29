@@ -1,14 +1,11 @@
-import { Config, Effect, Layer, Match, Option, Redacted, Ref, Schema, Semaphore } from 'effect'
-import { Client, escapeIdentifier, escapeLiteral } from 'pg'
+import { Config, Effect, Layer, Option, Redacted, Ref, Schema, Semaphore } from 'effect'
+import { Client, escapeLiteral } from 'pg'
 
+import { ensureReplicationContract as ensureReplicationContractEffect } from './replication-contract.ts'
+import type { ReplicationContractConnection } from './replication-contract.ts'
 import {
 	AcquireSlotLeaseResult,
-	CreatePublicationAlreadyExists,
-	CreatePublicationFailed,
-	CreatePublicationPermissionDenied,
 	IdentifySystemResult,
-	PublicationConfigurationResult,
-	ReadPublicationConfigurationFailed,
 	ReadServerInfoResult,
 	ReplicationOperationFailure,
 	ReplicationServerInfo,
@@ -21,23 +18,6 @@ import type { ReplicationOperationsApi } from './service'
 
 const notImplemented = (operation: string): Effect.Effect<never> =>
 	Effect.die(new Error(`Replication operation ${operation} is not implemented`))
-
-const PostgresErrorCode = Schema.Struct({ code: Schema.String })
-
-export const classifyCreatePublicationError = (
-	cause: unknown,
-): CreatePublicationAlreadyExists | CreatePublicationPermissionDenied | CreatePublicationFailed => {
-	const postgresError = Schema.decodeUnknownOption(PostgresErrorCode)(cause)
-	if (Option.isNone(postgresError)) {
-		return new CreatePublicationFailed({ cause })
-	}
-
-	return Match.value(postgresError.value.code).pipe(
-		Match.when('42710', () => new CreatePublicationAlreadyExists({ cause })),
-		Match.when('42501', () => new CreatePublicationPermissionDenied({ cause })),
-		Match.orElse(() => new CreatePublicationFailed({ cause })),
-	)
-}
 
 export const ReplicationOperationsLayer = Layer.effect(
 	ReplicationOperations,
@@ -62,6 +42,9 @@ export const ReplicationOperationsLayer = Layer.effect(
 		)
 		const acquiredSlotName = yield* Ref.make(Option.none<string>())
 		const slotLeaseSemaphore = yield* Semaphore.make(1)
+		const replicationContractConnection: ReplicationContractConnection = {
+			query: (queryText) => connection.query(queryText),
+		}
 
 		// On close of scope, if a slot has been acquired we release it
 		yield* Effect.addFinalizer(() =>
@@ -197,82 +180,8 @@ export const ReplicationOperationsLayer = Layer.effect(
 					}),
 				),
 			),
-			ensureReplicationContract: Effect.fn('replication_operations.ensure_replication_contract')(
-				function* (input) {
-					// Create the publication
-					yield* Effect.tryPromise({
-						try: () =>
-							connection.query(
-								`CREATE PUBLICATION ${escapeIdentifier(input.publicationName)} WITH (publish = 'insert, update, delete, truncate')`,
-							),
-						catch: (cause) => classifyCreatePublicationError(cause),
-					}).pipe(
-						Effect.asVoid,
-						Effect.catchTag('CreatePublicationAlreadyExists', () => Effect.void),
-						Effect.tapError((error) => Effect.logError('Failed to create replication publication', error)),
-						Effect.catchTags({
-							CreatePublicationPermissionDenied: () =>
-								Effect.fail(
-									ReplicationOperationFailure.cases.SourceRejected.make({
-										reason: 'publication-permission-denied',
-									}),
-								),
-							CreatePublicationFailed: () =>
-								Effect.fail(
-									ReplicationOperationFailure.cases.SessionUnavailable.make({
-										reason: 'setup-command-failed',
-									}),
-								),
-						}),
-					)
-
-					const publicationConfigurationResult = yield* Effect.tryPromise({
-						try: () =>
-							connection.query(
-								`SELECT pubinsert, pubupdate, pubdelete, pubtruncate
-								FROM pg_publication
-								WHERE pubname = ${escapeLiteral(input.publicationName)}`,
-							),
-						catch: (cause) => new ReadPublicationConfigurationFailed({ cause }),
-					}).pipe(
-						Effect.tapError((error) =>
-							Effect.logError('Failed to read replication publication configuration', error),
-						),
-						Effect.mapError(() =>
-							ReplicationOperationFailure.cases.SessionUnavailable.make({
-								reason: 'setup-command-failed',
-							}),
-						),
-					)
-
-					const publicationConfiguration = yield* Schema.decodeUnknownEffect(PublicationConfigurationResult)(
-						publicationConfigurationResult.rows.at(0),
-					).pipe(
-						Effect.tapError((error) =>
-							Effect.logError('Invalid replication publication configuration response', error),
-						),
-						Effect.mapError(() =>
-							ReplicationOperationFailure.cases.SourceRejected.make({
-								reason: 'replication-prerequisite-invalid',
-							}),
-						),
-					)
-
-					if (
-						!publicationConfiguration.pubinsert ||
-						!publicationConfiguration.pubupdate ||
-						!publicationConfiguration.pubdelete ||
-						!publicationConfiguration.pubtruncate
-					) {
-						return yield* Effect.fail(
-							ReplicationOperationFailure.cases.SourceRejected.make({
-								reason: 'publication-missing-required-operations',
-							}),
-						)
-					}
-					return yield* Effect.void
-				},
-			),
+			ensureReplicationContract: (contract) =>
+				ensureReplicationContractEffect({ connection: replicationContractConnection, contract }),
 			ensureReplicationSlot: Effect.fn('replication_operations.ensure_replication_slot')(() =>
 				notImplemented('ensureReplicationSlot'),
 			),
