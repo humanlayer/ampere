@@ -26,7 +26,6 @@ export default defineConfig({
 		ignorePatterns: [
 			'**/node_modules/**',
 			'**/dist/**',
-			'packages/effect-machine/src/**',
 			'.agent/**',
 			'.agents/**',
 			'.claude/**',

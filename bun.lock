@@ -31,24 +31,11 @@
         "vitest": "catalog:",
       },
     },
-    "packages/effect-machine": {
-      "name": "@ampere/effect-machine",
-      "version": "0.0.0",
-      "dependencies": {
-        "effect": "catalog:",
-      },
-      "devDependencies": {
-        "@ampere/vitest-config": "workspace:*",
-        "@effect/vitest": "catalog:",
-        "@types/bun": "catalog:",
-        "vitest": "catalog:",
-      },
-    },
     "packages/replication-setup": {
       "name": "@ampere/replication",
       "version": "0.0.0",
       "dependencies": {
-        "@ampere/effect-machine": "workspace:*",
+        "@humanlayer/effect-machine": "0.18.0",
         "effect": "catalog:",
         "pg": "catalog:",
       },
@@ -109,8 +96,6 @@
   "packages": {
     "@ampere/db": ["@ampere/db@workspace:packages/db"],
 
-    "@ampere/effect-machine": ["@ampere/effect-machine@workspace:packages/effect-machine"],
-
     "@ampere/replication": ["@ampere/replication@workspace:packages/replication-setup"],
 
     "@ampere/schemas": ["@ampere/schemas@workspace:packages/schemas"],
@@ -150,6 +135,8 @@
     "@effect/vitest": ["@effect/vitest@4.0.0-rc.112", "", { "peerDependencies": { "effect": "^4.0.0-rc.112", "vitest": ">=4.1.0 <5.0.0" } }, "sha512-mEKh/FI64mt8JK1/v9mpOrJYdnp+UFZdRUBMEdZMiKz7klg6NPqVgg/oeAGH6wOOQc2iAPcfc2H9BbAv1KyzMQ=="],
 
     "@electric-sql/pglite": ["@electric-sql/pglite@0.5.4", "", {}, "sha512-yYZUyyXrHU7tPlCjwZQJ6hIG9DscdCCn7Uk0mYKwC1FeHX286AbcmFveMiRBEak8e9iPupjsoVImN3yJZVed2g=="],
+
+    "@humanlayer/effect-machine": ["@humanlayer/effect-machine@0.18.0", "", { "peerDependencies": { "effect": "^4.0.0-beta.107" } }, "sha512-2UD9zlQjMQDxZLThfq4DG+qBJtiHKxxWGnRpKrW0SvNzV+SLz37gD8c7qnVyOsaO107nupksYgZILxsAnacXOg=="],
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 

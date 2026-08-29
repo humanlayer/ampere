@@ -1,4 +1,4 @@
-import { Event, Machine, State } from '@ampere/effect-machine'
+import { Event, Machine, State } from '@humanlayer/effect-machine'
 import { Cause, Effect, Match, Option } from 'effect'
 
 import {

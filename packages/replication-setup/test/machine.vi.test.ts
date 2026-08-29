@@ -1,5 +1,5 @@
-import { Machine, simulate } from '@ampere/effect-machine'
 import { describe, it } from '@effect/vitest'
+import { Machine, simulate } from '@humanlayer/effect-machine'
 import { Deferred, Effect, Layer, Ref } from 'effect'
 import { TestClock } from 'effect/testing'
 import { expect } from 'vitest'
