@@ -1,20 +1,22 @@
+import { Machine, simulate } from '@ampere/effect-machine'
 import { describe, it } from '@effect/vitest'
-import { MachineTest } from '@typeonce/effect-machine/testing'
-import { Effect, Option, Schema } from 'effect'
+import { Deferred, Effect, Layer, Ref } from 'effect'
+import { TestClock } from 'effect/testing'
 import { expect } from 'vitest'
 
-import { ReplicationConnection, ReplicationStates } from '../src/machine.ts'
+import { makeReplicationConnection, ReplicationEvents, ReplicationStates } from '../src/machine.ts'
 import {
 	Lsn,
-	ReplicationEventFields,
+	ReplicationOperationFailure,
 	ReplicationPlan,
 	ReplicationRelation,
 	ReplicationServerInfo,
 	ReplicationSlotPosition,
 	ReplicationSourceIdentity,
+	SlotLeaseOutcome,
 } from '../src/schemas.ts'
-
-const ReplicationEvent = Schema.TaggedUnion(ReplicationEventFields)
+import { ReplicationOperations } from '../src/service.ts'
+import type { ReplicationOperationsApi } from '../src/service.ts'
 
 const replicationPlan = ReplicationPlan.make({
 	slotName: 'ampere_slot',
@@ -28,120 +30,265 @@ const replicationPlan = ReplicationPlan.make({
 	],
 })
 
-const sourceIdentified = ReplicationEvent.cases.SourceIdentified.make({
-	sourceIdentity: ReplicationSourceIdentity.make({
-		systemIdentifier: 'ampere-test-system',
-		timelineId: 1,
-		databaseName: 'ampere',
-		currentWalFlushLsn: Lsn.make(0n),
-	}),
+const sourceIdentity = ReplicationSourceIdentity.make({
+	systemIdentifier: 'ampere-test-system',
+	timelineId: 1,
+	databaseName: 'ampere',
+	currentWalFlushLsn: Lsn.make(0n),
 })
 
-const serverInfoRead = ReplicationEvent.cases.ServerInfoRead.make({
-	serverInfo: ReplicationServerInfo.make({
-		serverVersionNumber: 180000,
-		backendProcessId: 1,
-		walSenderTimeoutMilliseconds: 60_000,
-		keepaliveIntervalMilliseconds: 15_000,
-	}),
+const serverInfo = ReplicationServerInfo.make({
+	serverVersionNumber: 180_000,
+	backendProcessId: 1,
+	walSenderTimeoutMilliseconds: 60_000,
+	keepaliveIntervalMilliseconds: 15_000,
 })
 
-const replicationSlotReady = ReplicationEvent.cases.ReplicationSlotReady.make({
-	slotPosition: ReplicationSlotPosition.make({
-		confirmedFlushLsn: Lsn.make(0n),
-		slotWasCreated: true,
-	}),
+const slotPosition = ReplicationSlotPosition.make({
+	confirmedFlushLsn: Lsn.make(0n),
+	slotWasCreated: true,
 })
 
 const successfulSetupEvents = [
-	ReplicationEvent.cases.ConnectionOpened.make({}),
-	sourceIdentified,
-	serverInfoRead,
-	ReplicationEvent.cases.SlotLeaseAcquired.make({}),
-	ReplicationEvent.cases.ReplicationContractEnsured.make({}),
-	replicationSlotReady,
-	ReplicationEvent.cases.OutputSettingsPinned.make({}),
-	ReplicationEvent.cases.PgOutputStarted.make({}),
+	ReplicationEvents.ConnectionOpened,
+	ReplicationEvents.SourceIdentified({ sourceIdentity }),
+	ReplicationEvents.ServerInfoRead({ serverInfo }),
+	ReplicationEvents.SlotLeaseAcquired,
+	ReplicationEvents.ReplicationContractEnsured,
+	ReplicationEvents.ReplicationSlotReady({ slotPosition }),
+	ReplicationEvents.OutputSettingsPinned,
+	ReplicationEvents.PgOutputStarted,
 ] as const
 
+type OperationCall =
+	| 'openReplicationSession'
+	| 'identifySource'
+	| 'readServerInfo'
+	| 'acquireSlotLease'
+	| 'ensureReplicationContract'
+	| 'ensureReplicationSlot'
+	| 'pinOutputSettings'
+	| 'startPgOutput'
+	| 'consumePgOutput'
+
+interface MakeTestOperationsInput {
+	readonly calls: Ref.Ref<ReadonlyArray<OperationCall>>
+	readonly acquireSlotLease?: ReplicationOperationsApi['acquireSlotLease']
+	readonly identifySource?: ReplicationOperationsApi['identifySource']
+	readonly consumePgOutput?: ReplicationOperationsApi['consumePgOutput']
+	readonly consumeStarted?: Deferred.Deferred<void>
+}
+
+const makeTestOperations = ({
+	calls,
+	acquireSlotLease,
+	identifySource,
+	consumePgOutput,
+	consumeStarted,
+}: MakeTestOperationsInput): ReplicationOperationsApi => {
+	const recordCall = (call: OperationCall): Effect.Effect<void> =>
+		Ref.update(calls, (recorded) => [...recorded, call])
+
+	return {
+		openReplicationSession: () => recordCall('openReplicationSession'),
+		identifySource: () =>
+			recordCall('identifySource').pipe(
+				Effect.andThen(identifySource === undefined ? Effect.succeed(sourceIdentity) : identifySource()),
+			),
+		readServerInfo: () => recordCall('readServerInfo').pipe(Effect.as(serverInfo)),
+		acquireSlotLease: (input) =>
+			recordCall('acquireSlotLease').pipe(
+				Effect.andThen(
+					acquireSlotLease === undefined
+						? Effect.succeed(SlotLeaseOutcome.cases.Acquired.make({}))
+						: acquireSlotLease(input),
+				),
+			),
+		ensureReplicationContract: () => recordCall('ensureReplicationContract'),
+		ensureReplicationSlot: () => recordCall('ensureReplicationSlot').pipe(Effect.as(slotPosition)),
+		pinOutputSettings: () => recordCall('pinOutputSettings'),
+		startPgOutput: () => recordCall('startPgOutput'),
+		consumePgOutput: (input) =>
+			recordCall('consumePgOutput').pipe(
+				Effect.andThen(
+					consumeStarted === undefined ? Effect.void : Deferred.succeed(consumeStarted, undefined),
+				),
+				Effect.andThen(consumePgOutput === undefined ? Effect.never : consumePgOutput(input)),
+			),
+	}
+}
+
+const makeTestOperationsLayer = (operations: ReplicationOperationsApi) =>
+	Layer.succeed(ReplicationOperations, operations)
+
 describe('ReplicationConnection', () => {
-	it.effect('reaches Streaming only after every setup prerequisite succeeds', () =>
+	it.effect('models the complete setup path as pure transitions', () =>
 		Effect.gen(function* () {
-			const trace = yield* MachineTest.run(ReplicationConnection, {
-				input: replicationPlan,
-				events: successfulSetupEvents,
-			})
-			const configurations = [trace.initial.configuration, ...trace.steps.map((step) => step.afterConfiguration)]
-
-			expect(configurations).toEqual([
-				['Connecting'],
-				['IdentifyingSource'],
-				['ReadingServerInfo'],
-				['AcquiringSlotLease'],
-				['EnsuringReplicationContract'],
-				['EnsuringReplicationSlot'],
-				['PinningOutputSettings'],
-				['StartingPgOutput'],
-				['Streaming'],
-			])
-		}),
-	)
-
-	it.effect('waits with an exponential delay before incrementing the slot lease attempt', () =>
-		Effect.gen(function* () {
-			const trace = yield* MachineTest.run(ReplicationConnection, {
-				input: replicationPlan,
-				events: [
-					ReplicationEvent.cases.ConnectionOpened.make({}),
-					sourceIdentified,
-					serverInfoRead,
-					ReplicationEvent.cases.SlotLeaseWaitRequired.make({}),
-					ReplicationEvent.cases.SlotLeaseRetryElapsed.make({}),
-				],
-			})
-			const waitingSnapshot = trace.steps
-				.map((step) => step.after)
-				.find((snapshot) => ReplicationStates.matches(snapshot, 'WaitingToRetrySlotLease'))
-
-			expect(waitingSnapshot).toBeDefined()
-			const waitingState = Option.getOrThrow(
-				ReplicationStates.get(waitingSnapshot ?? trace.final, 'WaitingToRetrySlotLease'),
+			const calls = yield* Ref.make<ReadonlyArray<OperationCall>>([])
+			const machine = makeReplicationConnection({ plan: replicationPlan })
+			const result = yield* simulate(machine, successfulSetupEvents).pipe(
+				Effect.provide(makeTestOperationsLayer(makeTestOperations({ calls }))),
 			)
-			expect(waitingState.retry.attempt).toBe(1)
-			expect(waitingState.retry.delayMilliseconds).toBe(100)
 
-			expect(ReplicationStates.matches(trace.final, 'AcquiringSlotLease')).toBe(true)
-			const finalState = Option.getOrThrow(ReplicationStates.get(trace.final, 'AcquiringSlotLease'))
-			expect(finalState.leaseAttempt).toBe(2)
+			expect(result.states).toEqual([
+				ReplicationStates.Connecting({ plan: replicationPlan }),
+				ReplicationStates.IdentifyingSource({ plan: replicationPlan }),
+				ReplicationStates.ReadingServerInfo({ plan: replicationPlan, sourceIdentity }),
+				ReplicationStates.AcquiringSlotLease({
+					plan: replicationPlan,
+					sourceIdentity,
+					serverInfo,
+					leaseAttempt: 1,
+				}),
+				ReplicationStates.EnsuringReplicationContract({ plan: replicationPlan, sourceIdentity, serverInfo }),
+				ReplicationStates.EnsuringReplicationSlot({ plan: replicationPlan, sourceIdentity, serverInfo }),
+				ReplicationStates.PinningOutputSettings({
+					plan: replicationPlan,
+					sourceIdentity,
+					serverInfo,
+					slotPosition,
+				}),
+				ReplicationStates.StartingPgOutput({
+					plan: replicationPlan,
+					sourceIdentity,
+					serverInfo,
+					slotPosition,
+				}),
+				ReplicationStates.Streaming({
+					plan: replicationPlan,
+					sourceIdentity,
+					serverInfo,
+					slotPosition,
+				}),
+			])
+			expect(yield* Ref.get(calls)).toEqual([])
 		}),
 	)
 
-	it.effect('records the actual active phase when a session becomes unavailable', () =>
-		Effect.gen(function* () {
-			const trace = yield* MachineTest.run(ReplicationConnection, {
-				input: replicationPlan,
-				events: [
-					ReplicationEvent.cases.ConnectionOpened.make({}),
-					sourceIdentified,
-					serverInfoRead,
-					ReplicationEvent.cases.SessionUnavailable.make({ reason: 'setup-command-failed' }),
-				],
-			})
-			const finalState = Option.getOrThrow(ReplicationStates.get(trace.final, 'ReconnectRequired'))
+	it.effect('runs task and spawn operations from the provided service layer', () =>
+		Effect.scoped(
+			Machine.scoped(
+				Effect.gen(function* () {
+					const calls = yield* Ref.make<ReadonlyArray<OperationCall>>([])
+					const consumeStarted = yield* Deferred.make<void>()
+					const operationsLayer = makeTestOperationsLayer(makeTestOperations({ calls, consumeStarted }))
+					const machine = makeReplicationConnection({ plan: replicationPlan })
+					const actor = yield* Machine.spawn(machine, { id: 'successful-replication' }).pipe(
+						Effect.provide(operationsLayer),
+					)
 
-			expect(finalState.phase).toBe('AcquiringSlotLease')
-			expect(finalState.reason).toBe('setup-command-failed')
-		}),
+					// The layer only wraps spawn. actor.start uses the service context captured by Machine.spawn.
+					yield* actor.start
+					const streamingState = yield* actor.waitFor(ReplicationStates.Streaming)
+					yield* Deferred.await(consumeStarted)
+
+					expect(ReplicationStates.$is('Streaming')(streamingState)).toBe(true)
+					expect(yield* Ref.get(calls)).toEqual([
+						'openReplicationSession',
+						'identifySource',
+						'readServerInfo',
+						'acquireSlotLease',
+						'ensureReplicationContract',
+						'ensureReplicationSlot',
+						'pinOutputSettings',
+						'startPgOutput',
+						'consumePgOutput',
+					])
+				}),
+			),
+		),
 	)
 
-	it.effect('stops cleanly from Streaming', () =>
-		Effect.gen(function* () {
-			const trace = yield* MachineTest.run(ReplicationConnection, {
-				input: replicationPlan,
-				events: [...successfulSetupEvents, ReplicationEvent.cases.StopRequested.make({})],
-			})
+	it.effect('uses the test clock for slot lease retry tasks', () =>
+		Effect.scoped(
+			Machine.scoped(
+				Effect.gen(function* () {
+					const calls = yield* Ref.make<ReadonlyArray<OperationCall>>([])
+					const leaseAttempts = yield* Ref.make(0)
+					const acquireSlotLease: ReplicationOperationsApi['acquireSlotLease'] = () =>
+						Ref.updateAndGet(leaseAttempts, (attempt) => attempt + 1).pipe(
+							Effect.map((attempt) =>
+								attempt === 1
+									? SlotLeaseOutcome.cases.WaitRequired.make({})
+									: SlotLeaseOutcome.cases.Acquired.make({}),
+							),
+						)
+					const operationsLayer = makeTestOperationsLayer(makeTestOperations({ calls, acquireSlotLease }))
+					const actor = yield* Machine.spawn(makeReplicationConnection({ plan: replicationPlan }), {
+						id: 'retrying-replication',
+					}).pipe(Effect.provide(operationsLayer))
+					yield* actor.start
 
-			expect(ReplicationStates.matches(trace.final, 'Stopped')).toBe(true)
-		}),
+					const waitingState = yield* actor.waitFor(ReplicationStates.WaitingToRetrySlotLease)
+					expect(ReplicationStates.$is('WaitingToRetrySlotLease')(waitingState)).toBe(true)
+					if (ReplicationStates.$is('WaitingToRetrySlotLease')(waitingState)) {
+						expect(waitingState.retry.attempt).toBe(1)
+						expect(waitingState.retry.delayMilliseconds).toBe(100)
+					}
+
+					yield* TestClock.adjust('100 millis')
+					const streamingState = yield* actor.waitFor(ReplicationStates.Streaming)
+
+					expect(ReplicationStates.$is('Streaming')(streamingState)).toBe(true)
+					expect(yield* Ref.get(leaseAttempts)).toBe(2)
+				}),
+			),
+		),
+	)
+
+	it.effect('maps task failures to the active terminal phase', () =>
+		Effect.scoped(
+			Machine.scoped(
+				Effect.gen(function* () {
+					const calls = yield* Ref.make<ReadonlyArray<OperationCall>>([])
+					const identifySource: ReplicationOperationsApi['identifySource'] = () =>
+						Effect.fail(
+							ReplicationOperationFailure.cases.SourceRejected.make({
+								reason: 'replication-prerequisite-invalid',
+							}),
+						)
+					const operationsLayer = makeTestOperationsLayer(makeTestOperations({ calls, identifySource }))
+					const actor = yield* Machine.spawn(makeReplicationConnection({ plan: replicationPlan }), {
+						id: 'rejected-replication',
+					}).pipe(Effect.provide(operationsLayer))
+					yield* actor.start
+
+					const rejectedState = yield* actor.awaitFinal
+
+					expect(ReplicationStates.$is('SourceConfigurationRejected')(rejectedState)).toBe(true)
+					if (ReplicationStates.$is('SourceConfigurationRejected')(rejectedState)) {
+						expect(rejectedState.phase).toBe('IdentifyingSource')
+						expect(rejectedState.reason).toBe('replication-prerequisite-invalid')
+					}
+				}),
+			),
+		),
+	)
+
+	it.effect('maps a streaming spawn failure to reconnect required', () =>
+		Effect.scoped(
+			Machine.scoped(
+				Effect.gen(function* () {
+					const calls = yield* Ref.make<ReadonlyArray<OperationCall>>([])
+					const consumePgOutput: ReplicationOperationsApi['consumePgOutput'] = () =>
+						Effect.fail(
+							ReplicationOperationFailure.cases.SessionUnavailable.make({ reason: 'connection-closed' }),
+						)
+					const operationsLayer = makeTestOperationsLayer(makeTestOperations({ calls, consumePgOutput }))
+					const actor = yield* Machine.spawn(makeReplicationConnection({ plan: replicationPlan }), {
+						id: 'disconnected-replication',
+					}).pipe(Effect.provide(operationsLayer))
+					yield* actor.start
+
+					const reconnectState = yield* actor.awaitFinal
+
+					expect(ReplicationStates.$is('ReconnectRequired')(reconnectState)).toBe(true)
+					if (ReplicationStates.$is('ReconnectRequired')(reconnectState)) {
+						expect(reconnectState.phase).toBe('Streaming')
+						expect(reconnectState.reason).toBe('connection-closed')
+					}
+				}),
+			),
+		),
 	)
 })

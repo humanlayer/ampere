@@ -1,10 +1,11 @@
 {
-	"name": "@ampere/replication",
+	"name": "@ampere/effect-machine",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./testing": "./src/testing.ts"
 	},
 	"scripts": {
 		"build": "echo 'No build required - library package'",
@@ -12,15 +13,12 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@ampere/effect-machine": "workspace:*",
-		"effect": "catalog:",
-		"pg": "catalog:"
+		"effect": "catalog:"
 	},
 	"devDependencies": {
 		"@ampere/vitest-config": "workspace:*",
 		"@effect/vitest": "catalog:",
 		"@types/bun": "catalog:",
-		"@types/pg": "catalog:",
 		"vitest": "catalog:"
 	}
 }

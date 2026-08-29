@@ -72,6 +72,10 @@ export const ReadServerInfoResult = Schema.Struct({
 	),
 })
 
+export const AcquireSlotLeaseResult = Schema.Struct({
+	acquired: Schema.Boolean,
+})
+
 export const ReplicationServerInfo = Schema.TaggedStruct('ReplicationServerInfo', {
 	serverVersionNumber: PositiveInteger,
 	backendProcessId: PositiveInteger,
@@ -200,6 +204,40 @@ export const ReplicationOperationFailure = Schema.TaggedUnion({
 
 export const AcquireSlotLeaseInput = Schema.Struct({
 	slotName: PostgresIdentifier,
+})
+
+export class ReplicationSlotLeaseAlreadyAcquired extends Schema.TaggedError<ReplicationSlotLeaseAlreadyAcquired>()(
+	'ReplicationSlotLeaseAlreadyAcquired',
+	{
+		acquiredSlotName: PostgresIdentifier,
+		requestedSlotName: PostgresIdentifier,
+	},
+) {}
+
+export class CreatePublicationAlreadyExists extends Schema.TaggedError<CreatePublicationAlreadyExists>()(
+	'CreatePublicationAlreadyExists',
+	{ cause: Schema.Defect() },
+) {}
+
+export class CreatePublicationPermissionDenied extends Schema.TaggedError<CreatePublicationPermissionDenied>()(
+	'CreatePublicationPermissionDenied',
+	{ cause: Schema.Defect() },
+) {}
+
+export class CreatePublicationFailed extends Schema.TaggedError<CreatePublicationFailed>()('CreatePublicationFailed', {
+	cause: Schema.Defect(),
+}) {}
+
+export class ReadPublicationConfigurationFailed extends Schema.TaggedError<ReadPublicationConfigurationFailed>()(
+	'ReadPublicationConfigurationFailed',
+	{ cause: Schema.Defect() },
+) {}
+
+export const PublicationConfigurationResult = Schema.Struct({
+	pubinsert: Schema.Boolean,
+	pubupdate: Schema.Boolean,
+	pubdelete: Schema.Boolean,
+	pubtruncate: Schema.Boolean,
 })
 
 export const EnsureReplicationContractInput = Schema.Struct({

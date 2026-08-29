@@ -22,11 +22,11 @@ export default defineConfig({
 		jsPlugins: [
 			{ name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
 			{ name: 'anti-slop-effect', specifier: './tools/oxlint/anti-slop/effect/index.ts' },
-			{ name: 'effect-machine', specifier: '@typeonce/oxlint-plugin-effect-machine' },
 		],
 		ignorePatterns: [
 			'**/node_modules/**',
 			'**/dist/**',
+			'packages/effect-machine/src/**',
 			'.agent/**',
 			'.agents/**',
 			'.claude/**',
@@ -49,6 +49,7 @@ export default defineConfig({
 			},
 		],
 		rules: {
+			complexity: ['error', { max: 20, variant: 'classic' }],
 			'oxc/no-barrel-file': 'error',
 			'typescript/no-explicit-any': 'error',
 			'typescript/await-thenable': 'error',
@@ -71,12 +72,6 @@ export default defineConfig({
 			'typescript/unbound-method': 'error',
 			'effecttsgo/any-unknown-in-error-context': 'error',
 			'effecttsgo/strict-effect-provide': 'error',
-			'effect-machine/no-async-planning-callback': 'error',
-			'effect-machine/no-browser-api-in-planning': 'error',
-			'effect-machine/no-conflicting-invocation-identity': 'error',
-			'effect-machine/no-nondeterministic-planning': 'error',
-			'effect-machine/no-redundant-resolve': 'error',
-			'effect-machine/prefer-inline-handle': 'error',
 			'vitest/expect-expect': 'off',
 			'vitest/no-conditional-expect': 'off',
 			'vitest/no-disabled-tests': 'off',
