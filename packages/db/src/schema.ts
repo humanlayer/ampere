@@ -9,7 +9,9 @@ export const todos = pgTable('todos', {
 
 export const todoComments = pgTable('todo_comments', {
 	id: integer().primaryKey().generatedAlwaysAsIdentity(),
-	todoId: integer().notNull().references(() => todos.id, { onDelete: 'cascade' }),
+	todoId: integer()
+		.notNull()
+		.references(() => todos.id, { onDelete: 'cascade' }),
 	body: text().notNull(),
 	createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 })

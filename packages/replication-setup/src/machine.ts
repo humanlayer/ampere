@@ -159,12 +159,10 @@ export const makeReplicationConnection = ({ plan }: MakeReplicationConnectionInp
 			}),
 		)
 		.on(ReplicationStates.AcquiringSlotLease, ReplicationEvents.StopRequested, () => ReplicationStates.Stopped)
-		.task(
-			ReplicationStates.WaitingToRetrySlotLease,
-			({ state }) =>
-				Effect.sleep(state.retry.delayMilliseconds).pipe(Effect.as(ReplicationEvents.SlotLeaseRetryElapsed)),
-			{ name: ReplicationActivity.enums.WaitToRetrySlotLease },
-		)
+		.task(ReplicationStates.WaitingToRetrySlotLease, ({ state }) => Effect.sleep(state.retry.delayMilliseconds), {
+			name: ReplicationActivity.enums.WaitToRetrySlotLease,
+			onSuccess: () => ReplicationEvents.SlotLeaseRetryElapsed,
+		})
 		.on(ReplicationStates.WaitingToRetrySlotLease, ReplicationEvents.SlotLeaseRetryElapsed, ({ state }) =>
 			ReplicationStates.AcquiringSlotLease.with(state, { leaseAttempt: state.retry.attempt + 1 }),
 		)

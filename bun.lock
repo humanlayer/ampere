@@ -35,7 +35,7 @@
       "name": "@ampere/replication",
       "version": "0.0.0",
       "dependencies": {
-        "@humanlayer/effect-machine": "0.18.0",
+        "@humanlayer/effect-machine": "0.19.1",
         "effect": "catalog:",
         "pg": "catalog:",
       },
@@ -136,7 +136,7 @@
 
     "@electric-sql/pglite": ["@electric-sql/pglite@0.5.4", "", {}, "sha512-yYZUyyXrHU7tPlCjwZQJ6hIG9DscdCCn7Uk0mYKwC1FeHX286AbcmFveMiRBEak8e9iPupjsoVImN3yJZVed2g=="],
 
-    "@humanlayer/effect-machine": ["@humanlayer/effect-machine@0.18.0", "", { "peerDependencies": { "effect": "^4.0.0-beta.107" } }, "sha512-2UD9zlQjMQDxZLThfq4DG+qBJtiHKxxWGnRpKrW0SvNzV+SLz37gD8c7qnVyOsaO107nupksYgZILxsAnacXOg=="],
+    "@humanlayer/effect-machine": ["@humanlayer/effect-machine@0.19.1", "", { "peerDependencies": { "effect": "^4.0.0-beta.107" } }, "sha512-RAsZKPzmTyh5kGZdj/af0FOG776Taqe6sHTPQCW0hNDFeypswW2AOmqNogtqp7x8cnWVFKHrlP0N6OqoaOaWHg=="],
 
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
