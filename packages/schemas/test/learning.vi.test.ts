@@ -24,7 +24,7 @@ const ArrayToString = Schema.Uint8Array.pipe(
 describe('Schemas can decode from a buffer', () => {
 	it.effect('Sanity Check ', ({ expect }) =>
 		Effect.gen(function* () {
-			const s = yield* Schema.decodeUnknownEffect(ArrayToString)(new Uint8Array([97, 98, 99, 100]))
+			const s = yield* Schema.decodeEffect(ArrayToString)(new Uint8Array([97, 98, 99, 100]))
 			expect(s).toBe('abcd')
 		}),
 	)

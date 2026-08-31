@@ -1,19 +1,16 @@
+import { recommended } from '@effect/tsgo/oxlint-presets'
 import { defineConfig } from 'vite-plus'
 
 export default defineConfig({
-	// Vitest: every workspace package with a vitest.config.ts is a project.
 	test: {
 		projects: ['apps/*/vitest.config.ts', 'packages/*/vitest.config.ts'],
 	},
-	// Oxlint. `typeAware` + `typeCheck` run full TypeScript 7 (tsgo) type checking
-	// through the effect-tsgo-patched tsgolint, which also emits Effect diagnostics.
 	lint: {
-		plugins: ['typescript', 'oxc', 'vitest', 'effecttsgo'],
+		extends: [recommended],
+		plugins: ['typescript', 'oxc', 'vitest'],
 		options: {
-			typeAware: true,
 			typeCheck: true,
 		},
-		// Local anti-slop plugin (vendored from https://github.com/dmmulroy/anti-slop).
 		jsPlugins: [
 			{ name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
 			{ name: 'anti-slop-effect', specifier: './tools/oxlint/anti-slop/effect/index.ts' },
@@ -28,6 +25,7 @@ export default defineConfig({
 			'.continue/**',
 			'.cursor/**',
 			'.gemini/**',
+			'.humanlayer/**',
 			'.opencode/**',
 			'.pi/**',
 			'.roo/**',
@@ -55,6 +53,7 @@ export default defineConfig({
 			'vitest/require-mock-type-parameters': 'off',
 			'vitest/require-to-throw-message': 'off',
 			'anti-slop/no-chained-type-assertions': 'error',
+			'anti-slop/no-comments': 'error',
 			'anti-slop/no-conditional-empty-object-spread': 'error',
 			'anti-slop/no-known-value-widening': 'error',
 			'anti-slop/no-module-mocking': 'error',
@@ -69,10 +68,13 @@ export default defineConfig({
 			'anti-slop/no-unsafe-dictionary-type': 'error',
 			'anti-slop/no-widen-then-assert': 'error',
 			'anti-slop/require-safety-comment-for-type-assertion': 'error',
+			'anti-slop-effect/no-manual-effect-error-tag': 'error',
+			'anti-slop-effect/no-manual-tag-comparison': 'error',
+			'anti-slop-effect/no-manual-tagged-construction': 'error',
 			'anti-slop-effect/no-service-constructor-imports': 'error',
+			'anti-slop-effect/prefer-effect-match': 'error',
 		},
 	},
-	// Oxfmt.
 	fmt: {
 		printWidth: 120,
 		tabWidth: 4,
@@ -80,6 +82,22 @@ export default defineConfig({
 		singleQuote: true,
 		semi: false,
 		sortImports: true,
-		ignorePatterns: ['**/node_modules/**', '**/dist/**', '.claude/**', 'tools/oxlint/anti-slop/**'],
+		ignorePatterns: [
+			'**/node_modules/**',
+			'**/dist/**',
+			'.agent/**',
+			'.agents/**',
+			'.claude/**',
+			'.codex/**',
+			'.continue/**',
+			'.cursor/**',
+			'.gemini/**',
+			'.humanlayer/**',
+			'.opencode/**',
+			'.pi/**',
+			'.roo/**',
+			'.windsurf/**',
+			'tools/oxlint/anti-slop/**',
+		],
 	},
 })
