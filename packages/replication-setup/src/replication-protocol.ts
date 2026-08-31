@@ -4,21 +4,24 @@ import { Cause, Data, Effect, Match, Option, Predicate, Queue, Ref, Schema, Stre
 import { escapeIdentifier, escapeLiteral } from 'pg'
 import type { Client, Connection, Submittable } from 'pg'
 
-import { PostgresLsnValue, ReplicationOperationFailure, ReplicationProtocolFrame } from './schemas.ts'
-import type { AcknowledgeReplicationLsnInput, StartPgOutputInput, StreamReplicationFramesInput } from './schemas.ts'
+import { PostgresLsnValue, ReplicationOperationFailure, ReplicationProtocolFrameFromBytes } from './schemas.ts'
+import type {
+	AcknowledgeReplicationLsnInput,
+	StartPgOutputInput,
+	StreamReplicationFramesInput,
+	ReplicationProtocolFrame,
+} from './schemas.ts'
 
-declare module 'pg' {
-	interface Connection {
-		readonly sendCopyFromChunk: (chunk: Uint8Array) => void
-	}
-}
+export const NodePostgresCopyDataPayload = Schema.Struct({
+	chunk: Schema.Uint8Array,
+})
 
-interface NodePostgresCopyDataMessage {
-	readonly chunk: Uint8Array
+interface NodePostgresReplicationConnection extends Connection {
+	readonly sendCopyFromChunk: (chunk: Uint8Array) => void
 }
 
 interface ReplicationQuery extends Submittable {
-	readonly handleCopyData: (message: NodePostgresCopyDataMessage) => void
+	readonly handleCopyData: (message: typeof NodePostgresCopyDataPayload.Encoded) => void
 	readonly handleError: (cause: unknown) => void
 	readonly handleReadyForQuery: () => void
 }
@@ -45,8 +48,6 @@ class PgOutputStartupFailed extends Data.TaggedError('PgOutputStartupFailed')<{
 
 const PostgresErrorCode = Schema.Struct({ code: Schema.String })
 const postgresEpochMilliseconds = Date.UTC(2000, 0, 1)
-const xLogDataHeaderLength = 25
-const primaryKeepaliveLength = 18
 const replicationFrameQueueCapacity = 256
 
 const connectionErrored = ReplicationOperationFailure.cases.SessionUnavailable.make({ reason: 'connection-errored' })
@@ -57,18 +58,21 @@ const protocolIncompatible = ReplicationOperationFailure.cases.SourceRejected.ma
 	reason: 'pgoutput-protocol-incompatible',
 })
 
-const hasRequiredProtocolHooks = (connection: Connection): boolean =>
+const hasRequiredProtocolHooks = (connection: Connection): connection is NodePostgresReplicationConnection =>
 	Predicate.isObject(connection) &&
 	Predicate.hasProperty(connection, 'once') &&
 	Predicate.hasProperty(connection, 'removeListener') &&
 	Predicate.hasProperty(connection, 'query') &&
 	Predicate.hasProperty(connection, 'sendCopyFromChunk') &&
+	Predicate.isFunction(connection.sendCopyFromChunk) &&
 	Predicate.hasProperty(connection, 'stream') &&
 	Predicate.isObject(connection.stream) &&
 	Predicate.hasProperty(connection.stream, 'pause') &&
 	Predicate.hasProperty(connection.stream, 'resume')
 
-const readProtocolConnection = (client: Client): Effect.Effect<Connection, ReplicationProtocolAdapterUnavailable> => {
+const readProtocolConnection = (
+	client: Client,
+): Effect.Effect<NodePostgresReplicationConnection, ReplicationProtocolAdapterUnavailable> => {
 	const connection = client.connection
 	if (hasRequiredProtocolHooks(connection)) {
 		return Effect.succeed(connection)
@@ -93,41 +97,10 @@ export const makeStartPgOutputCommand = ({
 }: typeof StartPgOutputInput.Type): string =>
 	`START_REPLICATION SLOT ${escapeIdentifier(slotName)} LOGICAL ${formatPostgresLsn(startLsn)} (proto_version '1', publication_names ${escapeLiteral(escapeIdentifier(publicationName))})`
 
-const readUnsignedInt64 = (bytes: Uint8Array, offset: number): bigint => {
-	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-	return view.getBigUint64(offset, false)
-}
-
-const readSignedInt64 = (bytes: Uint8Array, offset: number): bigint => {
-	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-	return view.getBigInt64(offset, false)
-}
-
 export const parseReplicationProtocolFrame = (
 	bytes: Uint8Array,
-): Effect.Effect<typeof ReplicationProtocolFrame.Type, typeof ReplicationOperationFailure.Type> => {
-	const messageType = bytes.at(0)
-	if (messageType === 0x77 && bytes.byteLength >= xLogDataHeaderLength) {
-		return Effect.succeed(
-			ReplicationProtocolFrame.cases.XLogData.make({
-				walStart: PostgresLsnValue.make(readUnsignedInt64(bytes, 1)),
-				serverWalEnd: PostgresLsnValue.make(readUnsignedInt64(bytes, 9)),
-				serverTimestampMicroseconds: readSignedInt64(bytes, 17),
-				payload: bytes.slice(xLogDataHeaderLength),
-			}),
-		)
-	}
-	if (messageType === 0x6b && bytes.byteLength === primaryKeepaliveLength) {
-		return Effect.succeed(
-			ReplicationProtocolFrame.cases.PrimaryKeepalive.make({
-				serverWalEnd: PostgresLsnValue.make(readUnsignedInt64(bytes, 1)),
-				serverTimestampMicroseconds: readSignedInt64(bytes, 9),
-				replyRequested: bytes.at(17) === 1,
-			}),
-		)
-	}
-	return Effect.fail(protocolIncompatible)
-}
+): Effect.Effect<typeof ReplicationProtocolFrame.Type, typeof ReplicationOperationFailure.Type> =>
+	Schema.decodeEffect(ReplicationProtocolFrameFromBytes)(bytes).pipe(Effect.mapError(() => protocolIncompatible))
 
 export const makeStandbyStatusUpdate = (safeFlushLsn: bigint, timestampMilliseconds: number): Uint8Array => {
 	const bytes = new Uint8Array(34)
@@ -161,7 +134,7 @@ const classifyPgOutputStartupFailure = (error: PgOutputStartupFailed) => {
 }
 
 const offerReplicationFrame = (
-	connection: Connection,
+	connection: NodePostgresReplicationConnection,
 	queue: Queue.Queue<typeof ReplicationProtocolFrame.Type, typeof ReplicationOperationFailure.Type>,
 	frame: typeof ReplicationProtocolFrame.Type,
 ): void => {
@@ -181,7 +154,7 @@ const offerReplicationFrame = (
 }
 
 const sendStandbyStatusUpdate = (
-	connection: Connection,
+	connection: NodePostgresReplicationConnection,
 	safeFlushLsn: Ref.Ref<typeof PostgresLsnValue.Type>,
 ): Effect.Effect<void, typeof ReplicationOperationFailure.Type> =>
 	Ref.get(safeFlushLsn).pipe(
@@ -212,9 +185,12 @@ export const validateReplicationProtocolConnection = Effect.fn('replication_prot
 	const failFrameQueue = (failure: typeof ReplicationOperationFailure.Type): void => {
 		Queue.failCauseUnsafe(frameQueue, Cause.fail(failure))
 	}
-	const handleCopyData = (message: NodePostgresCopyDataMessage): void => {
+	const handleCopyData = (message: typeof NodePostgresCopyDataPayload.Encoded): void => {
 		runFork(
-			parseReplicationProtocolFrame(message.chunk).pipe(
+			Schema.decodeEffect(NodePostgresCopyDataPayload)(message).pipe(
+				Effect.tapError((error) => Effect.logError('Invalid node-postgres CopyData message', error)),
+				Effect.mapError(() => protocolIncompatible),
+				Effect.flatMap(({ chunk }) => parseReplicationProtocolFrame(chunk)),
 				Effect.tap((frame) =>
 					Match.value(frame).pipe(
 						Match.tag('PrimaryKeepalive', (keepalive) =>

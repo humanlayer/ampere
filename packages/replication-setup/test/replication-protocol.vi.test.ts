@@ -1,12 +1,18 @@
 import { describe, it } from '@effect/vitest'
-import { Effect, Exit, Option } from 'effect'
+import { Effect, Exit, Option, Schema } from 'effect'
 
 import {
 	advanceSafeFlushLsn,
 	makeStandbyStatusUpdate,
+	NodePostgresCopyDataPayload,
 	parseReplicationProtocolFrame,
 } from '../src/replication-protocol.ts'
-import { PostgresLsnValue, ReplicationOperationFailure, ReplicationProtocolFrame } from '../src/schemas.ts'
+import {
+	PostgresLsnValue,
+	ReplicationOperationFailure,
+	ReplicationProtocolFrame,
+	ReplicationProtocolFrameFromBytes,
+} from '../src/schemas.ts'
 
 const writeUnsignedInt64 = (bytes: Uint8Array, offset: number, value: bigint): void => {
 	new DataView(bytes.buffer).setBigUint64(offset, value, false)
@@ -17,6 +23,19 @@ const writeSignedInt64 = (bytes: Uint8Array, offset: number, value: bigint): voi
 }
 
 describe('PostgreSQL replication protocol', () => {
+	it.effect('decodes the node-postgres CopyData callback payload with Schema', ({ expect }) =>
+		Effect.gen(function* () {
+			const chunk = new Uint8Array([0x77])
+			const payload = yield* Schema.decodeUnknownEffect(NodePostgresCopyDataPayload)({
+				name: 'copyData',
+				length: 1,
+				chunk,
+			})
+
+			expect(payload).toStrictEqual({ chunk })
+		}),
+	)
+
 	it.effect('parses an XLogData frame without copying its header into the payload', ({ expect }) =>
 		Effect.gen(function* () {
 			const bytes = new Uint8Array(28)
@@ -26,7 +45,7 @@ describe('PostgreSQL replication protocol', () => {
 			writeSignedInt64(bytes, 17, 30n)
 			bytes.set([0x42, 0x43, 0x44], 25)
 
-			const frame = yield* parseReplicationProtocolFrame(bytes)
+			const frame = yield* Schema.decodeEffect(ReplicationProtocolFrameFromBytes)(bytes)
 
 			expect(frame).toStrictEqual(
 				ReplicationProtocolFrame.cases.XLogData.make({
@@ -73,6 +92,25 @@ describe('PostgreSQL replication protocol', () => {
 						}),
 					)
 				}
+			}
+		}),
+	)
+
+	it.effect('rejects a primary keepalive with an invalid reply request byte', ({ expect }) =>
+		Effect.gen(function* () {
+			const bytes = new Uint8Array(18)
+			bytes[0] = 0x6b
+			bytes[17] = 2
+
+			const exit = yield* Effect.exit(parseReplicationProtocolFrame(bytes))
+
+			expect(Exit.isFailure(exit)).toBe(true)
+			if (Exit.isFailure(exit)) {
+				expect(Option.getOrUndefined(Exit.findErrorOption(exit))).toStrictEqual(
+					ReplicationOperationFailure.cases.SourceRejected.make({
+						reason: 'pgoutput-protocol-incompatible',
+					}),
+				)
 			}
 		}),
 	)

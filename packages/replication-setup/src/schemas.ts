@@ -1,4 +1,4 @@
-import { Schema, SchemaGetter } from 'effect'
+import { Effect, Schema, SchemaGetter, SchemaIssue } from 'effect'
 
 const maximumPostgresLsn = 0xffff_ffff_ffff_ffffn
 
@@ -300,6 +300,64 @@ export const ReplicationProtocolFrame = Schema.TaggedUnion({
 		replyRequested: Schema.Boolean,
 	},
 })
+
+const xLogDataHeaderLength = 25
+const primaryKeepaliveLength = 18
+
+const readUnsignedInt64 = (bytes: Uint8Array, offset: number): bigint => {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+	return view.getBigUint64(offset, false)
+}
+
+const readSignedInt64 = (bytes: Uint8Array, offset: number): bigint => {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+	return view.getBigInt64(offset, false)
+}
+
+const invalidReplicationProtocolFrame = (message: string) => Effect.fail(new SchemaIssue.InvalidValue({ message }))
+
+const decodeReplicationProtocolFrame = (
+	bytes: Uint8Array,
+): Effect.Effect<typeof ReplicationProtocolFrame.Type, SchemaIssue.InvalidValue> => {
+	const messageType = bytes.at(0)
+	if (messageType === 0x77) {
+		if (bytes.byteLength < xLogDataHeaderLength) {
+			return invalidReplicationProtocolFrame('XLogData frame is shorter than its 25-byte header.')
+		}
+		return Effect.succeed(
+			ReplicationProtocolFrame.cases.XLogData.make({
+				walStart: PostgresLsnValue.make(readUnsignedInt64(bytes, 1)),
+				serverWalEnd: PostgresLsnValue.make(readUnsignedInt64(bytes, 9)),
+				serverTimestampMicroseconds: readSignedInt64(bytes, 17),
+				payload: bytes.slice(xLogDataHeaderLength),
+			}),
+		)
+	}
+	if (messageType === 0x6b) {
+		if (bytes.byteLength !== primaryKeepaliveLength) {
+			return invalidReplicationProtocolFrame('Primary keepalive frame must be exactly 18 bytes.')
+		}
+		const replyRequested = bytes.at(17)
+		if (replyRequested !== 0 && replyRequested !== 1) {
+			return invalidReplicationProtocolFrame('Primary keepalive reply request must be either 0 or 1.')
+		}
+		return Effect.succeed(
+			ReplicationProtocolFrame.cases.PrimaryKeepalive.make({
+				serverWalEnd: PostgresLsnValue.make(readUnsignedInt64(bytes, 1)),
+				serverTimestampMicroseconds: readSignedInt64(bytes, 9),
+				replyRequested: replyRequested === 1,
+			}),
+		)
+	}
+	return invalidReplicationProtocolFrame(`Unsupported PostgreSQL replication protocol message type: ${messageType}`)
+}
+
+export const ReplicationProtocolFrameFromBytes = Schema.Uint8Array.pipe(
+	Schema.decodeTo(ReplicationProtocolFrame, {
+		encode: SchemaGetter.forbidden(() => 'Encoding a PostgreSQL replication protocol frame is not supported.'),
+		decode: SchemaGetter.transformOrFail(decodeReplicationProtocolFrame),
+	}),
+)
 
 enum ReplicationActivityId {
 	OpenReplicationSession = 'replication.open_session',
