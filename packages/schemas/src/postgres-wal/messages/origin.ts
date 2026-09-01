@@ -1,8 +1,8 @@
 import { Effect, Schema, SchemaGetter } from 'effect'
 
-import { failPgOutputDecode, PgOutputDecodeFailure } from './errors.ts'
-import { PostgresLsnValue } from './lsn.ts'
-import { PgOutputV1MessageTypeByte } from './type-bytes.ts'
+import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors.ts'
+import { PostgresLsnValue } from '../lsn.ts'
+import { PgOutputV1MessageTypeByte } from '../type-bytes.ts'
 
 const originMessageHeaderLength = 9
 const textDecoder = new TextDecoder()

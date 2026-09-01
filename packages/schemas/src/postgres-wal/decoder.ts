@@ -1,14 +1,14 @@
 import { Effect, Schema } from 'effect'
 
-import { BeginMessageFromBytes } from './begin.ts'
-import { CommitMessageFromBytes } from './commit.ts'
+import { BeginMessageFromBytes } from './messages/begin.ts'
+import { CommitMessageFromBytes } from './messages/commit.ts'
 import {
 	IncompatibleProtocolError,
 	mapPgOutputSchemaError,
 	MessageDecodeError,
 	UnsupportedMessageError,
 } from './errors.ts'
-import { OriginMessageFromBytes } from './origin.ts'
+import { OriginMessageFromBytes } from './messages/origin.ts'
 import {
 	findLaterPgOutputProtocolMessageTypeName,
 	findUnimplementedPgOutputV1MessageTypeName,
