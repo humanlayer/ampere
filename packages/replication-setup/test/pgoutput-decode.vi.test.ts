@@ -1,4 +1,4 @@
-import { decodePgOutputMessage } from '@ampere/schemas/wal'
+import { PgOutputMessageDecoder, PgOutputMessageDecoderLive } from '@ampere/schemas/wal'
 import { describe, it } from '@effect/vitest'
 import { Context, Effect, Fiber, HashSet, Layer, Match, Queue, Ref, Schema, Stream } from 'effect'
 import { Client, escapeIdentifier, escapeLiteral } from 'pg'
@@ -106,6 +106,7 @@ describe('Live pgoutput decode', () => {
 			const committedXids = yield* Ref.make(HashSet.empty<number>())
 			const committedXidNotifications = yield* Queue.unbounded<number>()
 
+			const decoder = yield* PgOutputMessageDecoder
 			const decodeConsumer = yield* operations
 				.streamReplicationFrames({
 					keepaliveIntervalMilliseconds: hourInMilliseconds,
@@ -113,7 +114,7 @@ describe('Live pgoutput decode', () => {
 				})
 				.pipe(
 					Stream.filter(ReplicationProtocolFrame.guards.XLogData),
-					Stream.mapEffect((frame) => decodePgOutputMessage({ bytes: frame.payload })),
+					Stream.mapEffect((frame) => decoder.decodeMessage({ bytes: frame.payload })),
 					Stream.runForEach((message) =>
 						Match.value(message).pipe(
 							Match.tag('Begin', ({ xid }) => Ref.set(currentBeginXid, xid)),
@@ -159,6 +160,6 @@ describe('Live pgoutput decode', () => {
 
 			const committed = yield* Ref.get(committedXids)
 			expect(expectedXids.every((xid) => HashSet.has(committed, xid))).toBe(true)
-		}),
+		}).pipe(Effect.provide(PgOutputMessageDecoderLive)),
 	)
 })

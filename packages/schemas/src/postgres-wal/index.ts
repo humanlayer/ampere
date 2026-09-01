@@ -1,4 +1,7 @@
 export { decodePgOutputMessage, DecodePgOutputMessageInput } from './decoder.ts'
+export { PgOutputMessageDecoder, PgOutputMessageDecoderLive } from './decoder-service.ts'
+export type { DecodePgOutputMessageError, PgOutputMessageDecoderApi } from './decoder-service.ts'
+export { PgOutputMessage } from './messages.ts'
 export {
 	IncompatibleProtocolError,
 	MessageDecodeError,
