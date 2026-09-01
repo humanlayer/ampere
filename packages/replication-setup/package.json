@@ -12,6 +12,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@ampere/schemas": "workspace:*",
 		"@humanlayer/effect-machine": "0.19.1",
 		"effect": "catalog:",
 		"pg": "catalog:"
