@@ -35,6 +35,10 @@ export const MessageDecodeFailureReason = Schema.Literals([
 	'truncated-message',
 	'trailing-bytes',
 	'known-v1-type-not-yet-decoded',
+	'unknown-replica-identity',
+	'unknown-tuple-kind',
+	'unknown-tuple-cell-kind',
+	'missing-new-tuple',
 ])
 export type MessageDecodeFailureReason = typeof MessageDecodeFailureReason.Type
 

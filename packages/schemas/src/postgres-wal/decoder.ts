@@ -1,19 +1,22 @@
 import { Effect, Schema } from 'effect'
 
-import { BeginMessageFromBytes } from './messages/begin.ts'
-import { CommitMessageFromBytes } from './messages/commit.ts'
 import {
 	IncompatibleProtocolError,
 	mapPgOutputSchemaError,
 	MessageDecodeError,
 	UnsupportedMessageError,
 } from './errors.ts'
+import { BeginMessageFromBytes } from './messages/begin.ts'
+import { CommitMessageFromBytes } from './messages/commit.ts'
+import { DeleteMessageFromBytes } from './messages/delete.ts'
+import { InsertMessageFromBytes } from './messages/insert.ts'
+import { LogicalDecodingMessageFromBytes } from './messages/message.ts'
 import { OriginMessageFromBytes } from './messages/origin.ts'
-import {
-	findLaterPgOutputProtocolMessageTypeName,
-	findUnimplementedPgOutputV1MessageTypeName,
-	PgOutputV1MessageTypeByte,
-} from './type-bytes.ts'
+import { RelationMessageFromBytes } from './messages/relation.ts'
+import { TruncateMessageFromBytes } from './messages/truncate.ts'
+import { TypeMessageFromBytes } from './messages/type.ts'
+import { UpdateMessageFromBytes } from './messages/update.ts'
+import { findLaterPgOutputProtocolMessageTypeName, PgOutputV1MessageTypeByte } from './type-bytes.ts'
 
 export const DecodePgOutputMessageInput = Schema.Struct({
 	bytes: Schema.Uint8Array,
@@ -37,14 +40,28 @@ export const decodePgOutputMessage = Effect.fn('pgoutput.decode_message')(functi
 	if (typeByte === PgOutputV1MessageTypeByte.Origin) {
 		return yield* Schema.decodeEffect(OriginMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
 	}
-
-	const unimplementedMessageTypeName = findUnimplementedPgOutputV1MessageTypeName(typeByte)
-	if (unimplementedMessageTypeName !== undefined) {
-		return yield* new MessageDecodeError({
-			reason: 'known-v1-type-not-yet-decoded',
-			typeByte,
-			messageTypeName: unimplementedMessageTypeName,
-		})
+	if (typeByte === PgOutputV1MessageTypeByte.Relation) {
+		return yield* Schema.decodeEffect(RelationMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
+	}
+	if (typeByte === PgOutputV1MessageTypeByte.Type) {
+		return yield* Schema.decodeEffect(TypeMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
+	}
+	if (typeByte === PgOutputV1MessageTypeByte.Insert) {
+		return yield* Schema.decodeEffect(InsertMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
+	}
+	if (typeByte === PgOutputV1MessageTypeByte.Update) {
+		return yield* Schema.decodeEffect(UpdateMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
+	}
+	if (typeByte === PgOutputV1MessageTypeByte.Delete) {
+		return yield* Schema.decodeEffect(DeleteMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
+	}
+	if (typeByte === PgOutputV1MessageTypeByte.Truncate) {
+		return yield* Schema.decodeEffect(TruncateMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
+	}
+	if (typeByte === PgOutputV1MessageTypeByte.Message) {
+		return yield* Schema.decodeEffect(LogicalDecodingMessageFromBytes)(bytes).pipe(
+			Effect.mapError(mapPgOutputSchemaError),
+		)
 	}
 
 	const laterProtocolMessageTypeName = findLaterPgOutputProtocolMessageTypeName(typeByte)

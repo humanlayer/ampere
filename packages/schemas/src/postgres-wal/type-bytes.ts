@@ -2,10 +2,6 @@ export const ImplementedPgOutputV1MessageTypeByte = {
 	Begin: 0x42,
 	Commit: 0x43,
 	Origin: 0x4f,
-} as const
-export type ImplementedPgOutputV1MessageTypeName = keyof typeof ImplementedPgOutputV1MessageTypeByte
-
-export const UnimplementedPgOutputV1MessageTypeByte = {
 	Relation: 0x52,
 	Type: 0x59,
 	Insert: 0x49,
@@ -14,11 +10,10 @@ export const UnimplementedPgOutputV1MessageTypeByte = {
 	Truncate: 0x54,
 	Message: 0x4d,
 } as const
-export type UnimplementedPgOutputV1MessageTypeName = keyof typeof UnimplementedPgOutputV1MessageTypeByte
+export type ImplementedPgOutputV1MessageTypeName = keyof typeof ImplementedPgOutputV1MessageTypeByte
 
 export const PgOutputV1MessageTypeByte = {
 	...ImplementedPgOutputV1MessageTypeByte,
-	...UnimplementedPgOutputV1MessageTypeByte,
 } as const
 export type PgOutputV1MessageTypeName = keyof typeof PgOutputV1MessageTypeByte
 
@@ -35,16 +30,6 @@ export const LaterPgOutputProtocolMessageTypeByte = {
 } as const
 export type LaterPgOutputProtocolMessageTypeName = keyof typeof LaterPgOutputProtocolMessageTypeByte
 
-export const unimplementedPgOutputV1MessageTypes = [
-	['Relation', UnimplementedPgOutputV1MessageTypeByte.Relation],
-	['Type', UnimplementedPgOutputV1MessageTypeByte.Type],
-	['Insert', UnimplementedPgOutputV1MessageTypeByte.Insert],
-	['Update', UnimplementedPgOutputV1MessageTypeByte.Update],
-	['Delete', UnimplementedPgOutputV1MessageTypeByte.Delete],
-	['Truncate', UnimplementedPgOutputV1MessageTypeByte.Truncate],
-	['Message', UnimplementedPgOutputV1MessageTypeByte.Message],
-] as const
-
 export const laterPgOutputProtocolMessageTypes = [
 	['StreamStart', LaterPgOutputProtocolMessageTypeByte.StreamStart],
 	['StreamStop', LaterPgOutputProtocolMessageTypeByte.StreamStop],
@@ -56,16 +41,6 @@ export const laterPgOutputProtocolMessageTypes = [
 	['RollbackPrepared', LaterPgOutputProtocolMessageTypeByte.RollbackPrepared],
 	['StreamPrepare', LaterPgOutputProtocolMessageTypeByte.StreamPrepare],
 ] as const
-
-export const findUnimplementedPgOutputV1MessageTypeName = (
-	typeByte: number,
-): UnimplementedPgOutputV1MessageTypeName | undefined => {
-	for (const [messageTypeName, messageTypeByte] of unimplementedPgOutputV1MessageTypes) {
-		if (messageTypeByte === typeByte) {
-			return messageTypeName
-		}
-	}
-}
 
 export const findLaterPgOutputProtocolMessageTypeName = (
 	typeByte: number,
