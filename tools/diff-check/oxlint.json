@@ -1,0 +1,8 @@
+{
+	"$schema": "../../node_modules/oxlint/configuration_schema.json",
+	"jsPlugins": [{ "name": "diff-check", "specifier": "./plugin.ts" }],
+	"rules": {
+		"diff-check/no-explicit-function-return-type": "warn",
+		"diff-check/no-let": "warn"
+	}
+}

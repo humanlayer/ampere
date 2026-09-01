@@ -1,0 +1,25 @@
+{
+	"projects": ["tsconfig.json"],
+	"projectExcludes": ["**/node_modules/**", "**/dist/**", "**/coverage/**"],
+	"sourceExcludes": [
+		"**/*.d.ts",
+		"**/node_modules/**",
+		"**/dist/**",
+		"**/coverage/**",
+		"tools/oxlint/**",
+		"tools/typed-lint/**",
+		"tools/diff-check/**"
+	],
+	"rules": {
+		"no-svg-files": [
+			"error",
+			{
+				"include": ["apps/**/*.svg", "packages/**/*.svg"],
+				"exclude": ["**/generated/**", "**/node_modules/**"]
+			}
+		],
+		"no-xstate-derived-boolean-context": "error",
+		"prefer-effect-array-match": "error",
+		"prefer-typed-schema-apis": "error"
+	}
+}

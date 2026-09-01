@@ -40,6 +40,7 @@ import noTryCatch from "./rules/no-try-catch.ts";
 import pipeMaxArguments from "./rules/pipe-max-arguments.ts";
 import preferEffectMatch from "./rules/prefer-effect-match.ts";
 import preferOptionFromNullable from "./rules/prefer-option-from-nullable.ts";
+import preferTaggedErrorHandling from "./rules/prefer-tagged-error-handling.ts";
 import privateFunctionPrefix from "./rules/private-function-prefix.ts";
 import requireApprovedUiPrimitives from "./rules/require-approved-ui-primitives.ts";
 import requireCnForClassnameComposition from "./rules/require-cn-for-classname-composition.ts";
@@ -106,6 +107,7 @@ const plugin: Plugin = {
     "pipe-max-arguments": pipeMaxArguments,
     "prefer-effect-match": preferEffectMatch,
     "prefer-option-from-nullable": preferOptionFromNullable,
+    "prefer-tagged-error-handling": preferTaggedErrorHandling,
     "private-function-prefix": privateFunctionPrefix,
     "require-approved-ui-primitives": requireApprovedUiPrimitives,
     "require-cn-for-classname-composition": requireCnForClassnameComposition,

@@ -1,0 +1,10 @@
+@import 'tailwindcss';
+
+@theme {
+	--*: initial;
+	--color-action: oklch(0.62 0.19 252);
+	--color-on-action: oklch(0.98 0.01 252);
+	--spacing-content-gap: 0.75rem;
+	--spacing-control-block: 0.5rem;
+	--spacing-control-inline: 1rem;
+}

@@ -1,0 +1,29 @@
+{
+	"baseRef": "HEAD",
+	"oxlintConfigPath": "./oxlint.json",
+	"sourceExtensions": [".ts", ".tsx"],
+	"excludePathPrefixes": ["dist/", "coverage/", "vendor/", "tools/"],
+	"changedFileRules": [
+		{
+			"rule": "diff/key-file-change",
+			"severity": "warning",
+			"matchers": [
+				{
+					"_tag": "Directory",
+					"path": "packages/db/src/migrations/",
+					"message": "A database migration changed."
+				},
+				{
+					"_tag": "File",
+					"path": "package.json",
+					"message": "The root dependency and automation configuration changed."
+				},
+				{
+					"_tag": "File",
+					"path": "bun.lock",
+					"message": "The dependency lockfile changed."
+				}
+			]
+		}
+	]
+}
