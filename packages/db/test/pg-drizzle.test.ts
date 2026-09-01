@@ -25,7 +25,7 @@ describe('PostgreSQL through Effect SQL', () => {
 	it.effect('runs raw SQL through the SqlClient service', () =>
 		Effect.gen(function* () {
 			const sql = yield* SqlClient.SqlClient
-			const rows = yield* sql<{ answer: number }>`SELECT 41 + 1 AS answer`
+			const rows = yield* sql`SELECT 41 + 1 AS answer`
 			expect(rows).toEqual([{ answer: 42 }])
 		}).pipe(Effect.provide(PgLive)),
 	)
