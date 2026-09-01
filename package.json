@@ -5,6 +5,9 @@
 		"packages/*"
 	],
 	"type": "module",
+	"imports": {
+		"#anti-slop/*": "./tools/oxlint/anti-slop/*.ts"
+	},
 	"scripts": {
 		"build": "vp run -r build",
 		"dev": "vp run -r --parallel dev",

@@ -6,7 +6,7 @@ import {
 	MessageDecodeError,
 	PgOutputV1MessageTypeByte,
 	TruncateMessage,
-} from '../../src/postgres-wal/index.ts'
+} from '../../src/postgres-wal/index'
 
 const electricTruncateBytes = new Uint8Array([84, 0, 0, 0, 1, 0, 0, 0, 96, 0])
 const electricTruncateCascadeBytes = new Uint8Array([84, 0, 0, 0, 1, 1, 0, 0, 96, 0])

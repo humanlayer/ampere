@@ -1,8 +1,8 @@
 import { Config, Effect, Layer, Option, Redacted, Ref, Schema, Semaphore } from 'effect'
 import { Client, escapeLiteral } from 'pg'
 
-import { pinOutputSettings as pinOutputSettingsEffect } from './output-settings.ts'
-import type { OutputSettingsConnection } from './output-settings.ts'
+import { pinOutputSettings as pinOutputSettingsEffect } from './output-settings'
+import type { OutputSettingsConnection } from './output-settings'
 import {
 	compareReplicationRelations,
 	supportedPostgresMajorVersion,
@@ -10,9 +10,9 @@ import {
 	ensureReplicationRelation,
 	type ReplicationContractConnection,
 } from './replication-contract'
-import { validateReplicationProtocolConnection } from './replication-protocol.ts'
-import { ensureReplicationSlot as ensureReplicationSlotEffect } from './replication-slot.ts'
-import type { ReplicationSlotConnection } from './replication-slot.ts'
+import { validateReplicationProtocolConnection } from './replication-protocol'
+import { ensureReplicationSlot as ensureReplicationSlotEffect } from './replication-slot'
+import type { ReplicationSlotConnection } from './replication-slot'
 import {
 	AcquireSlotLeaseResult,
 	IdentifySystemResult,

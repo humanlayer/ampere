@@ -10,7 +10,7 @@ import {
 	PgOutputV1MessageTypeByte,
 	PostgresLsnValue,
 	UnsupportedMessageError,
-} from '../../src/postgres-wal/index.ts'
+} from '../../src/postgres-wal/index'
 
 const electricBeginMessageBytes = new Uint8Array([
 	66, 0, 0, 0, 2, 167, 244, 168, 128, 0, 2, 48, 246, 88, 88, 213, 242, 0, 0, 2, 107,

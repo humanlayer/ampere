@@ -15,7 +15,7 @@ import type {
 	SlotLeaseOutcome,
 	StartPgOutputInput,
 	StreamReplicationFramesInput,
-} from './schemas.ts'
+} from './schemas'
 
 export interface ReplicationOperationsApi {
 	readonly openReplicationSession: () => Effect.Effect<void, typeof ReplicationOperationFailure.Type>

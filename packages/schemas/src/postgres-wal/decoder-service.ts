@@ -1,10 +1,10 @@
-import { Context, Layer, Schema } from 'effect'
-import type { Effect } from 'effect'
+import { Context, Layer } from 'effect'
+import type { Effect, Schema } from 'effect'
 
-import { decodePgOutputMessage } from './decoder.ts'
-import type { DecodePgOutputMessageInput } from './decoder.ts'
-import type { IncompatibleProtocolError, MessageDecodeError, UnsupportedMessageError } from './errors.ts'
-import type { PgOutputMessage } from './messages.ts'
+import { decodePgOutputMessage } from './decoder'
+import type { DecodePgOutputMessageInput } from './decoder'
+import type { IncompatibleProtocolError, MessageDecodeError, UnsupportedMessageError } from './errors'
+import type { PgOutputMessage } from './messages'
 
 export type DecodePgOutputMessageError =
 	| MessageDecodeError

@@ -1,5 +1,5 @@
 import { describe, it } from '@effect/vitest'
-import { Effect } from 'effect'
+import { Effect, Schema } from 'effect'
 
 import {
 	decodePgOutputMessage,
@@ -7,7 +7,7 @@ import {
 	PgOutputV1MessageTypeByte,
 	RelationColumn,
 	RelationMessage,
-} from '../../src/postgres-wal/index.ts'
+} from '../../src/postgres-wal/index'
 
 const electricRelationMessageBytes = new Uint8Array([
 	82, 0, 0, 96, 0, 112, 117, 98, 108, 105, 99, 0, 102, 111, 111, 0, 100, 0, 2, 0, 98, 97, 114, 0, 0, 0, 0, 25, 255,
@@ -66,10 +66,8 @@ describe('pgoutput Relation decoder', () => {
 					bytes: new Uint8Array([...relationIdentityPrefix, identityByte, 0, 0]),
 				})
 
-				expect(message).toMatchObject({
-					_tag: 'Relation',
-					replicaIdentity,
-				})
+				const relationMessage = yield* Schema.decodeUnknownEffect(RelationMessage)(message)
+				expect(relationMessage.replicaIdentity).toBe(replicaIdentity)
 			}
 		}),
 	)

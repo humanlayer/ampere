@@ -7,7 +7,7 @@ import {
 	PgOutputV1MessageTypeByte,
 	TupleCell,
 	UpdateMessage,
-} from '../../src/postgres-wal/index.ts'
+} from '../../src/postgres-wal/index'
 
 const textEncoder = new TextEncoder()
 const textCell = (value: string) => TupleCell.cases.Text.make({ bytes: textEncoder.encode(value) })

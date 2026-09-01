@@ -1,8 +1,8 @@
 import { Effect, Schema } from 'effect'
 
-import type { PgOutputBytesCursor } from './bytes-cursor.ts'
-import { failPgOutputDecode, PgOutputDecodeFailure } from './errors.ts'
-import type { PgOutputV1MessageTypeName } from './type-bytes.ts'
+import type { PgOutputBytesCursor } from './bytes-cursor'
+import { failPgOutputDecode, PgOutputDecodeFailure } from './errors'
+import type { PgOutputV1MessageTypeName } from './type-bytes'
 
 export const TupleCellKindByte = {
 	Null: 0x6e,

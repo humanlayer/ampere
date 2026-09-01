@@ -2,5 +2,5 @@
 // config loader externalizes this workspace package, so Node imports the
 // TypeScript source natively (type stripping) and applies strict ESM
 // resolution — extensionless relative imports would fail at load time.
-export { base } from './base.ts'
-export { projects } from './projects.ts'
+export { base } from './base'
+export { projects } from './projects'

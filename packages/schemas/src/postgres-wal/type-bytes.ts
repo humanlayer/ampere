@@ -50,4 +50,5 @@ export const findLaterPgOutputProtocolMessageTypeName = (
 			return messageTypeName
 		}
 	}
+	return undefined
 }

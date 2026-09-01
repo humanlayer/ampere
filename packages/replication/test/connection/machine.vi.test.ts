@@ -4,7 +4,7 @@ import { Deferred, Effect, Layer, Option, Ref, Stream } from 'effect'
 import { TestClock } from 'effect/testing'
 import { expect } from 'vitest'
 
-import { makeReplicationConnection, ReplicationEvents, ReplicationStates } from '../src/machine.ts'
+import { makeReplicationConnection, ReplicationEvents, ReplicationStates } from '../../src/connection/machine'
 import {
 	Lsn,
 	ReplicationOperationFailure,
@@ -14,9 +14,9 @@ import {
 	ReplicationSlotPosition,
 	ReplicationSourceIdentity,
 	SlotLeaseOutcome,
-} from '../src/schemas.ts'
-import { ReplicationOperations } from '../src/service.ts'
-import type { ReplicationOperationsApi } from '../src/service.ts'
+} from '../../src/connection/schemas'
+import { ReplicationOperations } from '../../src/connection/service'
+import type { ReplicationOperationsApi } from '../../src/connection/service'
 
 const replicationPlan = ReplicationPlan.make({
 	slotName: 'ampere_slot',

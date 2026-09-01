@@ -88,10 +88,15 @@ export const failPgOutputDecode = (failure: PgOutputDecodeFailure, message: stri
 		}),
 	)
 
-const findPgOutputDecodeFailureAnnotation = (issue: SchemaIssue.Issue): unknown =>
+const findPgOutputDecodeFailureAnnotation = (issue: SchemaIssue.Issue): PgOutputDecodeFailure | undefined =>
 	Match.value(issue).pipe(
 		Match.tagsExhaustive({
-			InvalidValue: ({ annotations }) => annotations?.[pgOutputDecodeFailureAnnotationKey],
+			InvalidValue: ({ annotations }) =>
+				Option.getOrUndefined(
+					Schema.decodeUnknownOption(PgOutputDecodeFailure)(
+						annotations?.[pgOutputDecodeFailureAnnotationKey],
+					),
+				),
 			InvalidType: () => undefined,
 			MissingKey: () => undefined,
 			UnexpectedKey: () => undefined,
@@ -132,9 +137,7 @@ const pgOutputDecodeFailureToError = Match.type<PgOutputDecodeFailure>().pipe(
 export const mapPgOutputSchemaError = (
 	schemaError: Schema.SchemaError,
 ): Schema.SchemaError | MessageDecodeError | IncompatibleProtocolError | UnsupportedMessageError => {
-	const decodedFailure = Schema.decodeUnknownOption(PgOutputDecodeFailure)(
-		findPgOutputDecodeFailureAnnotation(schemaError.issue),
-	)
+	const decodedFailure = Option.fromUndefinedOr(findPgOutputDecodeFailureAnnotation(schemaError.issue))
 	if (Option.isNone(decodedFailure)) {
 		return schemaError
 	}

@@ -1,6 +1,6 @@
 import { Data, Effect, Schema } from 'effect'
 
-import { ReplicationOperationFailure } from './schemas.ts'
+import { ReplicationOperationFailure } from './schemas'
 
 export interface OutputSettingsQueryResult {
 	readonly rows: ReadonlyArray<unknown>

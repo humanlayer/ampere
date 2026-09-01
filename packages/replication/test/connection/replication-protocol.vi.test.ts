@@ -6,13 +6,13 @@ import {
 	makeStandbyStatusUpdate,
 	NodePostgresCopyDataPayload,
 	parseReplicationProtocolFrame,
-} from '../src/replication-protocol.ts'
+} from '../../src/connection/replication-protocol'
 import {
 	PostgresLsnValue,
 	ReplicationOperationFailure,
 	ReplicationProtocolFrame,
 	ReplicationProtocolFrameFromBytes,
-} from '../src/schemas.ts'
+} from '../../src/connection/schemas'
 
 const writeUnsignedInt64 = (bytes: Uint8Array, offset: number, value: bigint): void => {
 	new DataView(bytes.buffer).setBigUint64(offset, value, false)

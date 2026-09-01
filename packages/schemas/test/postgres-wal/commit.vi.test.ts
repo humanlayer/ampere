@@ -7,7 +7,7 @@ import {
 	MessageDecodeError,
 	PgOutputV1MessageTypeByte,
 	PostgresLsnValue,
-} from '../../src/postgres-wal/index.ts'
+} from '../../src/postgres-wal/index'
 
 const electricCommitMessageBytes = new Uint8Array([
 	67, 0, 0, 0, 0, 2, 167, 244, 168, 128, 0, 0, 0, 2, 167, 244, 168, 176, 0, 2, 48, 246, 88, 88, 213, 242,

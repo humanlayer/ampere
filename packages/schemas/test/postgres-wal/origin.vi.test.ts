@@ -7,7 +7,7 @@ import {
 	OriginMessage,
 	PgOutputV1MessageTypeByte,
 	PostgresLsnValue,
-} from '../../src/postgres-wal/index.ts'
+} from '../../src/postgres-wal/index'
 
 const electricOriginMessageBytes = new Uint8Array([
 	79, 0, 0, 0, 2, 167, 244, 168, 128, 69, 108, 109, 101, 114, 32, 70, 117, 100, 0,

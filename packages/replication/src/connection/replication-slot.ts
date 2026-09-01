@@ -1,7 +1,7 @@
 import { Data, Effect, Option, Schema } from 'effect'
 import { escapeIdentifier, escapeLiteral } from 'pg'
 
-import { Lsn, ReplicationOperationFailure, ReplicationSlotPosition } from './schemas.ts'
+import { Lsn, ReplicationOperationFailure, ReplicationSlotPosition } from './schemas'
 
 export interface ReplicationSlotQueryResult {
 	readonly rows: ReadonlyArray<unknown>

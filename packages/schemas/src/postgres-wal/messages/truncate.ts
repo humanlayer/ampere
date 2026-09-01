@@ -1,9 +1,9 @@
 import { Effect, Schema, SchemaGetter } from 'effect'
 
-import { createPgOutputBytesCursor } from '../bytes-cursor.ts'
-import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors.ts'
-import { PostgresOid } from '../oids.ts'
-import { PgOutputV1MessageTypeByte } from '../type-bytes.ts'
+import { createPgOutputBytesCursor } from '../bytes-cursor'
+import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors'
+import { PostgresOid } from '../oids'
+import { PgOutputV1MessageTypeByte } from '../type-bytes'
 
 export const TruncateMessage = Schema.TaggedStruct('Truncate', {
 	optionFlags: Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(255))),

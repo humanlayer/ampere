@@ -31,7 +31,7 @@
         "vitest": "catalog:",
       },
     },
-    "packages/replication-setup": {
+    "packages/replication": {
       "name": "@ampere/replication",
       "version": "0.0.0",
       "dependencies": {
@@ -97,7 +97,7 @@
   "packages": {
     "@ampere/db": ["@ampere/db@workspace:packages/db"],
 
-    "@ampere/replication": ["@ampere/replication@workspace:packages/replication-setup"],
+    "@ampere/replication": ["@ampere/replication@workspace:packages/replication"],
 
     "@ampere/schemas": ["@ampere/schemas@workspace:packages/schemas"],
 

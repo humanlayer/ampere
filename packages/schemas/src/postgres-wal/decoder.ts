@@ -5,18 +5,18 @@ import {
 	mapPgOutputSchemaError,
 	MessageDecodeError,
 	UnsupportedMessageError,
-} from './errors.ts'
-import { BeginMessageFromBytes } from './messages/begin.ts'
-import { CommitMessageFromBytes } from './messages/commit.ts'
-import { DeleteMessageFromBytes } from './messages/delete.ts'
-import { InsertMessageFromBytes } from './messages/insert.ts'
-import { LogicalDecodingMessageFromBytes } from './messages/message.ts'
-import { OriginMessageFromBytes } from './messages/origin.ts'
-import { RelationMessageFromBytes } from './messages/relation.ts'
-import { TruncateMessageFromBytes } from './messages/truncate.ts'
-import { TypeMessageFromBytes } from './messages/type.ts'
-import { UpdateMessageFromBytes } from './messages/update.ts'
-import { findLaterPgOutputProtocolMessageTypeName, PgOutputV1MessageTypeByte } from './type-bytes.ts'
+} from './errors'
+import { BeginMessageFromBytes } from './messages/begin'
+import { CommitMessageFromBytes } from './messages/commit'
+import { DeleteMessageFromBytes } from './messages/delete'
+import { InsertMessageFromBytes } from './messages/insert'
+import { LogicalDecodingMessageFromBytes } from './messages/message'
+import { OriginMessageFromBytes } from './messages/origin'
+import { RelationMessageFromBytes } from './messages/relation'
+import { TruncateMessageFromBytes } from './messages/truncate'
+import { TypeMessageFromBytes } from './messages/type'
+import { UpdateMessageFromBytes } from './messages/update'
+import { findLaterPgOutputProtocolMessageTypeName, PgOutputV1MessageTypeByte } from './type-bytes'
 
 export const DecodePgOutputMessageInput = Schema.Struct({
 	bytes: Schema.Uint8Array,

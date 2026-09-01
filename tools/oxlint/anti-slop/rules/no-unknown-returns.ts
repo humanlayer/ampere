@@ -2,7 +2,7 @@ import { defineRule } from "@oxlint/plugins";
 
 import type { ESTree } from "@oxlint/plugins";
 
-import { lexicalTypeParameterNames } from "../shared/lexical-type-parameters.ts";
+import { lexicalTypeParameterNames } from "#anti-slop/shared/lexical-type-parameters";
 
 type FunctionWithReturnType =
   | ESTree.ArrowFunctionExpression

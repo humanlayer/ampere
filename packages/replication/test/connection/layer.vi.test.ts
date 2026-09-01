@@ -2,14 +2,20 @@ import { describe, it } from '@effect/vitest'
 import { Cause, Context, Effect, Exit, Fiber, Layer, Option, Stream } from 'effect'
 import { Client, escapeIdentifier, escapeLiteral } from 'pg'
 
-import { ReplicationOperationsLayer } from '../src/layer'
-import { pinOutputSettings } from '../src/output-settings.ts'
-import type { OutputSettingsConnection } from '../src/output-settings.ts'
-import { classifyReplicationContractQueryError, ensureReplicationRelation } from '../src/replication-contract'
-import type { ReplicationContractConnection, ReplicationContractQueryResult } from '../src/replication-contract'
-import { makeStartPgOutputCommand } from '../src/replication-protocol.ts'
-import { ensureReplicationSlot } from '../src/replication-slot.ts'
-import type { ReplicationSlotConnection } from '../src/replication-slot.ts'
+import { ReplicationOperationsLayer } from '../../src/connection/layer'
+import { pinOutputSettings } from '../../src/connection/output-settings'
+import type { OutputSettingsConnection } from '../../src/connection/output-settings'
+import {
+	classifyReplicationContractQueryError,
+	ensureReplicationRelation,
+} from '../../src/connection/replication-contract'
+import type {
+	ReplicationContractConnection,
+	ReplicationContractQueryResult,
+} from '../../src/connection/replication-contract'
+import { makeStartPgOutputCommand } from '../../src/connection/replication-protocol'
+import { ensureReplicationSlot } from '../../src/connection/replication-slot'
+import type { ReplicationSlotConnection } from '../../src/connection/replication-slot'
 import {
 	ReplicationContractAlreadyConfigured,
 	ReplicationContractPermissionDenied,
@@ -21,8 +27,8 @@ import {
 	ReplicationSlotPosition,
 	ReplicationSlotLeaseAlreadyAcquired,
 	SlotLeaseOutcome,
-} from '../src/schemas'
-import { ReplicationOperations } from '../src/service'
+} from '../../src/connection/schemas'
+import { ReplicationOperations } from '../../src/connection/service'
 
 const testDatabaseUrl = 'postgres://postgres:postgres@localhost:55432/ampere'
 

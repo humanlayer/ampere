@@ -7,9 +7,9 @@ import {
 	ReplicationEventFields,
 	ReplicationStateFields,
 	SlotLeaseRetry,
-} from './schemas.ts'
-import type { ReplicationOperationFailure, ReplicationPlan } from './schemas.ts'
-import { ReplicationOperations } from './service.ts'
+} from './schemas'
+import type { ReplicationOperationFailure, ReplicationPlan } from './schemas'
+import { ReplicationOperations } from './service'
 
 export const ReplicationStates = State(ReplicationStateFields)
 export const ReplicationEvents = Event(ReplicationEventFields)

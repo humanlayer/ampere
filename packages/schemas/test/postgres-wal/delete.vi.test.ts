@@ -7,7 +7,7 @@ import {
 	MessageDecodeError,
 	PgOutputV1MessageTypeByte,
 	TupleCell,
-} from '../../src/postgres-wal/index.ts'
+} from '../../src/postgres-wal/index'
 
 const textEncoder = new TextEncoder()
 const textCell = (value: string) => TupleCell.cases.Text.make({ bytes: textEncoder.encode(value) })

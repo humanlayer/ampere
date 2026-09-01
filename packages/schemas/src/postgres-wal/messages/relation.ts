@@ -1,9 +1,9 @@
 import { Effect, Schema, SchemaGetter } from 'effect'
 
-import { createPgOutputBytesCursor } from '../bytes-cursor.ts'
-import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors.ts'
-import { PostgresOid } from '../oids.ts'
-import { PgOutputV1MessageTypeByte } from '../type-bytes.ts'
+import { createPgOutputBytesCursor } from '../bytes-cursor'
+import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors'
+import { PostgresOid } from '../oids'
+import { PgOutputV1MessageTypeByte } from '../type-bytes'
 
 export const ReplicaIdentity = Schema.Literals(['default', 'nothing', 'all-columns', 'index'])
 export type ReplicaIdentity = typeof ReplicaIdentity.Type
@@ -25,7 +25,11 @@ export const RelationMessage = Schema.TaggedStruct('Relation', {
 })
 export interface RelationMessage extends Schema.Schema.Type<typeof RelationMessage> {}
 
-const replicaIdentityByByte: Record<number, ReplicaIdentity> = {
+interface ReplicaIdentityByByte {
+	readonly [identityByte: number]: ReplicaIdentity
+}
+
+const replicaIdentityByByte: ReplicaIdentityByByte = {
 	[0x64]: 'default',
 	[0x6e]: 'nothing',
 	[0x66]: 'all-columns',

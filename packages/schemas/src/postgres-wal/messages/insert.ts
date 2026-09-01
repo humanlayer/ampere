@@ -1,10 +1,10 @@
 import { Effect, Schema, SchemaGetter } from 'effect'
 
-import { createPgOutputBytesCursor } from '../bytes-cursor.ts'
-import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors.ts'
-import { PostgresOid } from '../oids.ts'
-import { readTupleDataFromCursor, TupleData, TupleDataKindByte } from '../tuple-data.ts'
-import { PgOutputV1MessageTypeByte } from '../type-bytes.ts'
+import { createPgOutputBytesCursor } from '../bytes-cursor'
+import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors'
+import { PostgresOid } from '../oids'
+import { readTupleDataFromCursor, TupleData, TupleDataKindByte } from '../tuple-data'
+import { PgOutputV1MessageTypeByte } from '../type-bytes'
 
 export const InsertMessage = Schema.TaggedStruct('Insert', {
 	relationOid: PostgresOid,

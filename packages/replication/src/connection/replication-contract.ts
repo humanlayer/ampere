@@ -8,12 +8,8 @@ import {
 	ReplicationContractQueryFailed,
 	ReplicationOperationFailure,
 	ReplicationRelationConfigurationResult,
-} from './schemas.ts'
-import type {
-	EnsureReplicationContractInput,
-	ReplicationContractQueryOperation,
-	ReplicationRelation,
-} from './schemas.ts'
+} from './schemas'
+import type { EnsureReplicationContractInput, ReplicationContractQueryOperation, ReplicationRelation } from './schemas'
 
 export interface ReplicationContractQueryResult {
 	readonly rows: ReadonlyArray<unknown>

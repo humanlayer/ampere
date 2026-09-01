@@ -4,13 +4,13 @@ import { Cause, Data, Effect, Match, Option, Predicate, Queue, Ref, Schema, Stre
 import { escapeIdentifier, escapeLiteral } from 'pg'
 import type { Client, Connection, Submittable } from 'pg'
 
-import { PostgresLsnValue, ReplicationOperationFailure, ReplicationProtocolFrameFromBytes } from './schemas.ts'
+import { PostgresLsnValue, ReplicationOperationFailure, ReplicationProtocolFrameFromBytes } from './schemas'
 import type {
 	AcknowledgeReplicationLsnInput,
 	StartPgOutputInput,
 	StreamReplicationFramesInput,
 	ReplicationProtocolFrame,
-} from './schemas.ts'
+} from './schemas'
 
 export const NodePostgresCopyDataPayload = Schema.Struct({
 	chunk: Schema.Uint8Array,

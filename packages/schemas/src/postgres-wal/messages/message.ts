@@ -1,9 +1,9 @@
 import { Effect, Schema, SchemaGetter } from 'effect'
 
-import { createPgOutputBytesCursor } from '../bytes-cursor.ts'
-import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors.ts'
-import { PostgresLsnValue } from '../lsn.ts'
-import { PgOutputV1MessageTypeByte } from '../type-bytes.ts'
+import { createPgOutputBytesCursor } from '../bytes-cursor'
+import { failPgOutputDecode, PgOutputDecodeFailure } from '../errors'
+import { PostgresLsnValue } from '../lsn'
+import { PgOutputV1MessageTypeByte } from '../type-bytes'
 
 export const LogicalDecodingMessage = Schema.TaggedStruct('Message', {
 	transactional: Schema.Boolean,
