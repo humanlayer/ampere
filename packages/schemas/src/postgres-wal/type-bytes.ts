@@ -1,6 +1,11 @@
-export const UnimplementedPgOutputV1MessageTypeByte = {
+export const ImplementedPgOutputV1MessageTypeByte = {
+	Begin: 0x42,
 	Commit: 0x43,
 	Origin: 0x4f,
+} as const
+export type ImplementedPgOutputV1MessageTypeName = keyof typeof ImplementedPgOutputV1MessageTypeByte
+
+export const UnimplementedPgOutputV1MessageTypeByte = {
 	Relation: 0x52,
 	Type: 0x59,
 	Insert: 0x49,
@@ -12,7 +17,7 @@ export const UnimplementedPgOutputV1MessageTypeByte = {
 export type UnimplementedPgOutputV1MessageTypeName = keyof typeof UnimplementedPgOutputV1MessageTypeByte
 
 export const PgOutputV1MessageTypeByte = {
-	Begin: 0x42,
+	...ImplementedPgOutputV1MessageTypeByte,
 	...UnimplementedPgOutputV1MessageTypeByte,
 } as const
 export type PgOutputV1MessageTypeName = keyof typeof PgOutputV1MessageTypeByte
@@ -31,8 +36,6 @@ export const LaterPgOutputProtocolMessageTypeByte = {
 export type LaterPgOutputProtocolMessageTypeName = keyof typeof LaterPgOutputProtocolMessageTypeByte
 
 export const unimplementedPgOutputV1MessageTypes = [
-	['Commit', UnimplementedPgOutputV1MessageTypeByte.Commit],
-	['Origin', UnimplementedPgOutputV1MessageTypeByte.Origin],
 	['Relation', UnimplementedPgOutputV1MessageTypeByte.Relation],
 	['Type', UnimplementedPgOutputV1MessageTypeByte.Type],
 	['Insert', UnimplementedPgOutputV1MessageTypeByte.Insert],

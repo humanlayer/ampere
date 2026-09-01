@@ -1,12 +1,14 @@
 import { Effect, Schema } from 'effect'
 
 import { BeginMessageFromBytes } from './begin.ts'
+import { CommitMessageFromBytes } from './commit.ts'
 import {
 	IncompatibleProtocolError,
 	mapPgOutputSchemaError,
 	MessageDecodeError,
 	UnsupportedMessageError,
 } from './errors.ts'
+import { OriginMessageFromBytes } from './origin.ts'
 import {
 	findLaterPgOutputProtocolMessageTypeName,
 	findUnimplementedPgOutputV1MessageTypeName,
@@ -28,6 +30,12 @@ export const decodePgOutputMessage = Effect.fn('pgoutput.decode_message')(functi
 
 	if (typeByte === PgOutputV1MessageTypeByte.Begin) {
 		return yield* Schema.decodeEffect(BeginMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
+	}
+	if (typeByte === PgOutputV1MessageTypeByte.Commit) {
+		return yield* Schema.decodeEffect(CommitMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
+	}
+	if (typeByte === PgOutputV1MessageTypeByte.Origin) {
+		return yield* Schema.decodeEffect(OriginMessageFromBytes)(bytes).pipe(Effect.mapError(mapPgOutputSchemaError))
 	}
 
 	const unimplementedMessageTypeName = findUnimplementedPgOutputV1MessageTypeName(typeByte)
