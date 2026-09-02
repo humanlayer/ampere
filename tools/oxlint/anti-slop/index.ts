@@ -7,6 +7,7 @@ import { noModuleMockingRule } from "#anti-slop/rules/no-module-mocking";
 import { noObjectParametersRule } from "#anti-slop/rules/no-object-parameters";
 import { noReflectApplyRule } from "#anti-slop/rules/no-reflect-apply";
 import { noReflectGetRule } from "#anti-slop/rules/no-reflect-get";
+import { noReprovideAmbientServiceRule } from "#anti-slop/rules/no-reprovide-ambient-service";
 import { noRuntimeTypeofRule } from "#anti-slop/rules/no-runtime-typeof";
 import { noForbiddenTermInSymbolNamesRule } from "#anti-slop/rules/no-shape-in-symbol-names";
 import { noUnknownParametersRule } from "#anti-slop/rules/no-unknown-parameters";
@@ -27,6 +28,7 @@ const antiSlopPlugin = eslintCompatPlugin({
 		"no-object-parameters": noObjectParametersRule,
 		"no-reflect-apply": noReflectApplyRule,
 		"no-reflect-get": noReflectGetRule,
+		"no-reprovide-ambient-service": noReprovideAmbientServiceRule,
 		"no-runtime-typeof": noRuntimeTypeofRule,
 		"no-unsafe-dictionary-type": noUnsafeDictionaryTypeRule,
 		"no-shape-in-symbol-names": noForbiddenTermInSymbolNamesRule,

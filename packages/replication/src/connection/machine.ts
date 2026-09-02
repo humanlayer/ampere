@@ -1,6 +1,7 @@
 import { Event, Machine, State } from '@humanlayer/effect-machine'
-import { Cause, Effect, Match, Option, Stream } from 'effect'
+import { Cause, Effect, Match, Option } from 'effect'
 
+import { ReplicationIngestApi } from '../ingest/service'
 import {
 	ConnectionPhaseId,
 	ReplicationActivity,
@@ -295,16 +296,13 @@ export const makeReplicationConnection = ({ plan }: MakeReplicationConnectionInp
 		)
 		.on(ReplicationStates.StartingPgOutput, ReplicationEvents.StopRequested, () => ReplicationStates.Stopped)
 		.spawn(ReplicationStates.Streaming, ({ self, state }) =>
-			ReplicationOperations.use((operations) =>
-				operations
-					.streamReplicationFrames({
+			ReplicationIngestApi.use((ingest) =>
+				ingest
+					.consumeReplicationSession({
 						keepaliveIntervalMilliseconds: state.serverInfo.keepaliveIntervalMilliseconds,
 						initialSafeFlushLsn: state.slotPosition.confirmedFlushLsn,
 					})
-					.pipe(
-						Stream.runDrain,
-						Effect.catch((failure) => self.send(operationFailureToEvent(failure))),
-					),
+					.pipe(Effect.catch((failure) => self.send(operationFailureToEvent(failure)))),
 			),
 		)
 		.on(ReplicationStates.Streaming, ReplicationEvents.SessionUnavailable, ({ event }) =>

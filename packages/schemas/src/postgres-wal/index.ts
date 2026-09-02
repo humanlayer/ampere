@@ -1,6 +1,4 @@
 export { decodePgOutputMessage, DecodePgOutputMessageInput } from './decoder'
-export { PgOutputMessageDecoder, PgOutputMessageDecoderLive } from './decoder-service'
-export type { DecodePgOutputMessageError, PgOutputMessageDecoderApi } from './decoder-service'
 export { PgOutputMessage } from './messages'
 export {
 	IncompatibleProtocolError,

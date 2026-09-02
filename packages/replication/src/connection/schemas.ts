@@ -87,6 +87,7 @@ export const ReconnectReason = Schema.Literals([
 	'connection-errored',
 	'setup-command-failed',
 	'server-ended-stream',
+	'ingest-pipeline-failed',
 ])
 
 export const SourceRejectionReason = Schema.Literals([

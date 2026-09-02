@@ -1,4 +1,4 @@
-import { Lsn, PgOutputMessageDecoder, PgOutputMessageDecoderLive } from '@ampere/schemas/wal'
+import { decodePgOutputMessage, Lsn } from '@ampere/schemas/wal'
 import { describe, it } from '@effect/vitest'
 import { Context, Effect, Fiber, HashSet, Layer, Option, Queue, Ref, Schema, Stream } from 'effect'
 import { Client, escapeIdentifier, escapeLiteral } from 'pg'
@@ -126,7 +126,6 @@ describe('Live pgoutput decode and transaction assembly', () => {
 					Effect.forkChild,
 				)
 
-				const decoder = yield* PgOutputMessageDecoder
 				const decodeConsumer = yield* operations
 					.streamReplicationFrames({
 						keepaliveIntervalMilliseconds: hourInMilliseconds,
@@ -134,7 +133,7 @@ describe('Live pgoutput decode and transaction assembly', () => {
 					})
 					.pipe(
 						Stream.filter(ReplicationProtocolFrame.guards.XLogData),
-						Stream.mapEffect((frame) => decoder.decodeMessage({ bytes: frame.payload })),
+						Stream.mapEffect((frame) => decodePgOutputMessage({ bytes: frame.payload })),
 						Stream.runForEach((message) => assembler.send({ message })),
 						Effect.forkChild,
 					)
@@ -180,6 +179,6 @@ describe('Live pgoutput decode and transaction assembly', () => {
 
 				const committed = yield* Ref.get(committedXids)
 				expect(expectedXids.every((xid) => HashSet.has(committed, xid))).toBe(true)
-			}).pipe(Effect.provide(PgOutputMessageDecoderLive)),
+			}),
 	)
 })

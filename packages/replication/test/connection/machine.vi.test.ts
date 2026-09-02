@@ -4,6 +4,8 @@ import { Deferred, Effect, Layer, Option, Ref, Stream } from 'effect'
 import { TestClock } from 'effect/testing'
 import { expect } from 'vitest'
 
+import { ChangeFeedApi } from '../../src/change-feed/service'
+import type { ChangeFeedService } from '../../src/change-feed/service'
 import { makeReplicationConnection, ReplicationEvents, ReplicationStates } from '../../src/connection/machine'
 import {
 	Lsn,
@@ -17,6 +19,10 @@ import {
 } from '../../src/connection/schemas'
 import { ReplicationOperations } from '../../src/connection/service'
 import type { ReplicationOperationsApi } from '../../src/connection/service'
+import { ReplicationIngestApi } from '../../src/ingest/service'
+import type { ReplicationIngestService } from '../../src/ingest/service'
+import { PgOutputTransactionAssembler } from '../../src/transaction-assembly/assembler-service'
+import type { PgOutputTransactionAssemblerApi } from '../../src/transaction-assembly/assembler-service'
 
 const replicationPlan = ReplicationPlan.make({
 	slotName: 'ampere_slot',
@@ -69,16 +75,12 @@ type OperationCall =
 	| 'ensureReplicationSlot'
 	| 'pinOutputSettings'
 	| 'startPgOutput'
-	| 'streamReplicationFrames'
 
 interface MakeTestOperationsInput {
 	readonly calls: Ref.Ref<ReadonlyArray<OperationCall>>
 	readonly acquireSlotLease?: ReplicationOperationsApi['acquireSlotLease']
 	readonly identifySource?: ReplicationOperationsApi['identifySource']
 	readonly startPgOutput?: ReplicationOperationsApi['startPgOutput']
-	readonly streamReplicationFrames?: ReplicationOperationsApi['streamReplicationFrames']
-	readonly consumeStarted?: Deferred.Deferred<void>
-	readonly streamInterrupted?: Deferred.Deferred<void>
 }
 
 const makeTestOperations = ({
@@ -86,9 +88,6 @@ const makeTestOperations = ({
 	acquireSlotLease,
 	identifySource,
 	startPgOutput,
-	streamReplicationFrames,
-	consumeStarted,
-	streamInterrupted,
 }: MakeTestOperationsInput): ReplicationOperationsApi => {
 	const recordCall = (call: OperationCall): Effect.Effect<void> =>
 		Ref.update(calls, (recorded) => [...recorded, call])
@@ -115,29 +114,32 @@ const makeTestOperations = ({
 			recordCall('startPgOutput').pipe(
 				Effect.andThen(startPgOutput === undefined ? Effect.void : startPgOutput(input)),
 			),
-		streamReplicationFrames: (input) =>
-			Stream.unwrap(
-				recordCall('streamReplicationFrames').pipe(
-					Effect.andThen(
-						consumeStarted === undefined ? Effect.void : Deferred.succeed(consumeStarted, undefined),
-					),
-					Effect.as(
-						(streamReplicationFrames === undefined ? Stream.never : streamReplicationFrames(input)).pipe(
-							Stream.ensuring(
-								streamInterrupted === undefined
-									? Effect.void
-									: Deferred.succeed(streamInterrupted, undefined),
-							),
-						),
-					),
-				),
-			),
+		streamReplicationFrames: () => Stream.never,
 		acknowledgeReplicationLsn: () => Effect.void,
 	}
 }
 
-const makeTestOperationsLayer = (operations: ReplicationOperationsApi) =>
-	Layer.succeed(ReplicationOperations, operations)
+const makeTestOperationsLayer = (
+	operations: ReplicationOperationsApi,
+	ingest: ReplicationIngestService = { consumeReplicationSession: () => Effect.never },
+) =>
+	Layer.merge(
+		Layer.merge(
+			Layer.merge(Layer.succeed(ReplicationOperations, operations), Layer.succeed(ReplicationIngestApi, ingest)),
+			Layer.succeed(ChangeFeedApi, testChangeFeed),
+		),
+		Layer.succeed(PgOutputTransactionAssembler, testTransactionAssembler),
+	)
+
+const testChangeFeed: ChangeFeedService = {
+	publishCommittedChangeBatch: () => Effect.die('Unexpected change-feed publication'),
+	committedChangeBatches: Stream.empty,
+}
+
+const testTransactionAssembler: PgOutputTransactionAssemblerApi = {
+	send: () => Effect.die('Unexpected transaction assembly'),
+	events: Stream.empty,
+}
 
 describe('ReplicationConnection', () => {
 	it.effect('models the complete setup path as pure transitions', () =>
@@ -188,8 +190,7 @@ describe('ReplicationConnection', () => {
 			Machine.scoped(
 				Effect.gen(function* () {
 					const calls = yield* Ref.make<ReadonlyArray<OperationCall>>([])
-					const consumeStarted = yield* Deferred.make<void>()
-					const operationsLayer = makeTestOperationsLayer(makeTestOperations({ calls, consumeStarted }))
+					const operationsLayer = makeTestOperationsLayer(makeTestOperations({ calls }))
 					const machine = makeReplicationConnection({ plan: replicationPlan })
 					const actor = yield* Machine.spawn(machine, { id: 'successful-replication' }).pipe(
 						Effect.provide(operationsLayer),
@@ -198,7 +199,6 @@ describe('ReplicationConnection', () => {
 					// The layer only wraps spawn. actor.start uses the service context captured by Machine.spawn.
 					yield* actor.start
 					const streamingState = yield* actor.waitFor(ReplicationStates.Streaming)
-					yield* Deferred.await(consumeStarted)
 
 					expect(ReplicationStates.$is('Streaming')(streamingState)).toBe(true)
 					expect(yield* Ref.get(calls)).toEqual([
@@ -210,7 +210,6 @@ describe('ReplicationConnection', () => {
 						'ensureReplicationSlot',
 						'pinOutputSettings',
 						'startPgOutput',
-						'streamReplicationFrames',
 					])
 				}),
 			),
@@ -288,13 +287,15 @@ describe('ReplicationConnection', () => {
 			Machine.scoped(
 				Effect.gen(function* () {
 					const calls = yield* Ref.make<ReadonlyArray<OperationCall>>([])
-					const streamReplicationFrames: ReplicationOperationsApi['streamReplicationFrames'] = () =>
-						Stream.fail(
-							ReplicationOperationFailure.cases.SessionUnavailable.make({ reason: 'connection-closed' }),
-						)
-					const operationsLayer = makeTestOperationsLayer(
-						makeTestOperations({ calls, streamReplicationFrames }),
-					)
+					const ingest: ReplicationIngestService = {
+						consumeReplicationSession: () =>
+							Effect.fail(
+								ReplicationOperationFailure.cases.SessionUnavailable.make({
+									reason: 'connection-closed',
+								}),
+							),
+					}
+					const operationsLayer = makeTestOperationsLayer(makeTestOperations({ calls }), ingest)
 					const actor = yield* Machine.spawn(makeReplicationConnection({ plan: replicationPlan }), {
 						id: 'disconnected-replication',
 					}).pipe(Effect.provide(operationsLayer))
@@ -320,37 +321,34 @@ describe('ReplicationConnection', () => {
 					const startupInput = yield* Ref.make<
 						Option.Option<Parameters<ReplicationOperationsApi['startPgOutput']>[0]>
 					>(Option.none())
-					const streamInput = yield* Ref.make<
-						Option.Option<Parameters<ReplicationOperationsApi['streamReplicationFrames']>[0]>
+					const ingestInput = yield* Ref.make<
+						Option.Option<Parameters<ReplicationIngestService['consumeReplicationSession']>[0]>
 					>(Option.none())
-					const streamInterrupted = yield* Deferred.make<void>()
-					const consumeStarted = yield* Deferred.make<void>()
-					const streamInputCaptured = yield* Deferred.make<void>()
+					const ingestInterrupted = yield* Deferred.make<void>()
+					const ingestInputCaptured = yield* Deferred.make<void>()
 					const startPgOutput: ReplicationOperationsApi['startPgOutput'] = (input) =>
 						Ref.set(startupInput, Option.some(input))
-					const streamReplicationFrames: ReplicationOperationsApi['streamReplicationFrames'] = (input) =>
-						Stream.unwrap(
-							Ref.set(streamInput, Option.some(input)).pipe(
-								Effect.andThen(Deferred.succeed(streamInputCaptured, undefined)),
-								Effect.as(Stream.never),
+					const ingest: ReplicationIngestService = {
+						consumeReplicationSession: (input) =>
+							Ref.set(ingestInput, Option.some(input)).pipe(
+								Effect.andThen(Deferred.succeed(ingestInputCaptured, undefined)),
+								Effect.andThen(Effect.never),
+								Effect.ensuring(Deferred.succeed(ingestInterrupted, undefined)),
 							),
-						)
+					}
 					const operationsLayer = makeTestOperationsLayer(
 						makeTestOperations({
 							calls,
 							startPgOutput,
-							streamReplicationFrames,
-							streamInterrupted,
-							consumeStarted,
 						}),
+						ingest,
 					)
 					const actor = yield* Machine.spawn(makeReplicationConnection({ plan: replicationPlan }), {
 						id: 'stopped-replication',
 					}).pipe(Effect.provide(operationsLayer))
 					yield* actor.start
 					yield* actor.waitFor(ReplicationStates.Streaming)
-					yield* Deferred.await(consumeStarted)
-					yield* Deferred.await(streamInputCaptured)
+					yield* Deferred.await(ingestInputCaptured)
 
 					expect(yield* Ref.get(startupInput)).toStrictEqual(
 						Option.some({
@@ -359,7 +357,7 @@ describe('ReplicationConnection', () => {
 							startLsn: slotPosition.confirmedFlushLsn,
 						}),
 					)
-					expect(yield* Ref.get(streamInput)).toStrictEqual(
+					expect(yield* Ref.get(ingestInput)).toStrictEqual(
 						Option.some({
 							keepaliveIntervalMilliseconds: serverInfo.keepaliveIntervalMilliseconds,
 							initialSafeFlushLsn: slotPosition.confirmedFlushLsn,
@@ -368,7 +366,7 @@ describe('ReplicationConnection', () => {
 
 					yield* actor.send(ReplicationEvents.StopRequested)
 					const finalState = yield* actor.awaitFinal
-					yield* Deferred.await(streamInterrupted)
+					yield* Deferred.await(ingestInterrupted)
 
 					expect(ReplicationStates.$is('Stopped')(finalState)).toBe(true)
 				}),
